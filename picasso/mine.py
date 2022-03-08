@@ -12,11 +12,11 @@ class MINE(nn.Module):
         # statistics network
         if T is None:
             self.T = nn.Sequential(
-                nn.Linear(2, 100),
+                nn.Linear(2, 256),
                 nn.ReLU(),
-                nn.Linear(100, 100),
+                nn.Linear(256, 256),
                 nn.ReLU(),
-                nn.Linear(100, 1),
+                nn.Linear(256, 1),
             )
         else:
             self.T = T
@@ -56,7 +56,7 @@ class MINE(nn.Module):
 
         return self.running_mean
 
-    def train_loop(self, X, Y, max_iter, batch_size=500, opt=None):
+    def train_loop(self, X, Y, max_iter=100, batch_size=500, opt=None):
 
         old_param = self.flatten_parameters()
 
@@ -79,12 +79,12 @@ class MINE(nn.Module):
             param_norm = torch.linalg.norm(new_param - old_param)
             old_param = new_param
 
-            if i % (iters // 4) == 0:
+            if i % (max_iter // 4) == 0:
                 print(f"It {i} - MI: {mi[-1]}")
 
-            if param_norm.item() < 0.05:
-                print(f"Converged in {i} iterations - MI: {mi[-1]}")
-                break
+            # if param_norm.item() < 0.005:
+            #     print(f"Converged in {i} iterations - MI: {mi[-1]}")
+            #     break
 
         return mi
 
@@ -92,7 +92,7 @@ class MINE(nn.Module):
 
         p = torch.tensor([],device=self.device)
 
-        for param in mine.parameters():
+        for param in self.parameters():
              p = torch.cat([p, param.data.flatten()])
 
         return p
@@ -115,6 +115,6 @@ class MINE_EMA_loss(torch.autograd.Function):
 
         input, = ctx.saved_tensors
 
-        grad = grad_output*torch.exp(input).detach()/ctx.ema/input.shape[0]     
+        grad = grad_output*torch.exp(input).detach()/ctx.ema/input.shape[0]
 
         return grad, None
