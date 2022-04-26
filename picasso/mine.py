@@ -4,19 +4,19 @@ from torch.utils.data import DataLoader
 from math import log
 
 class MINE(nn.Module):
-    def __init__(self, T=None, alpha=0.01):
+    def __init__(self, T=None, ema_coeff=0.1, neurons:int = 12):
         super(MINE, self).__init__()
-        self.alpha = alpha                                                      # weight coefficient for exponential moving average, higher alpha discounts older observations faster
+        self.alpha = ema_coeff                                                      # weight coefficient for exponential moving average, higher alpha discounts older observations faster
         self.running_mean = None                                                # running exponential moving average
 
         # statistics network
         if T is None:
             self.T = nn.Sequential(
-                nn.Linear(2, 256),
+                nn.Linear(2, neurons),
                 nn.ReLU(),
-                nn.Linear(256, 256),
+                nn.Linear(neurons, neurons),
                 nn.ReLU(),
-                nn.Linear(256, 1),
+                nn.Linear(neurons, 1),
             )
         else:
             self.T = T
