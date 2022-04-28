@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from math import log
 
 class MINE(nn.Module):
-    def __init__(self, T=None, ema_coeff=0.1, neurons:int = 12):
+    def __init__(self, T=None, ema_coeff:float = 0.1, neurons:int = 12):
         super(MINE, self).__init__()
         self.alpha = ema_coeff                                                      # weight coefficient for exponential moving average, higher alpha discounts older observations faster
         self.running_mean = None                                                # running exponential moving average
@@ -56,7 +56,7 @@ class MINE(nn.Module):
 
         return self.running_mean
 
-    def train_loop(self, X, Y, max_iter=100, batch_size=500, opt=None):
+    def train_loop(self, X, Y, max_iter:int = 100, batch_size:int = 500, opt=None):
 
         old_param = self.flatten_parameters()
 
