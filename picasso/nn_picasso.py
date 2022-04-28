@@ -148,8 +148,8 @@ class PICASSOnn(nn.Module):
                 batch_contrast_loss += torch.sum(contrast_loss).item()
 
                 # Save losses over iterations
-                mi_loss_.append(mi_loss)
-                contrast_loss_.append(contrast_loss)
+                mi_loss_.append(mi_loss.tolist())
+                contrast_loss_.append(contrast_loss.tolist())
 
                 if b_mi_loss == 0:
                     break
