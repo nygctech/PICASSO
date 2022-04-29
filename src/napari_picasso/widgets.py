@@ -109,7 +109,7 @@ class SinkWidget(Container):
 
         if self.current_src_opts is None:
             self.current_src_opts = SourceOptions(self.source_images(), self.mixing_params)
-            self.current_src_opts.changed.connect(self.get_mixing_params)
+            self.current_src_opts.changed.connect(self.update_mixing_params)
 
         self.current_src_opts.show()
 
@@ -265,7 +265,7 @@ class SourceOptions(Container):
 
 
     def __call__(self) -> {ImageData:float}:
-        '''Return dictionary of mixing paremeters {sink image : alpha}.''''
+        '''Return dictionary of mixing paremeters {sink image : alpha}.'''
 
         mp = {}
         for s in self.sources:
