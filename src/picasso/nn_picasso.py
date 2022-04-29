@@ -11,9 +11,8 @@ import psutil
 from math import ceil
 from typing import Union
 
-import sys
-sys.path.append('C:\\Users\\kpandit\\PICASSO\\picasso')
-import mine
+from ../mine import mine
+
 
 
 DA_TYPE = type(da.zeros(0))

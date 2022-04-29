@@ -1,6 +1,5 @@
-import sys
-sys.path.append('C:\\Users\\kpandit\\PICASSO\\picasso')
-import nn_picasso
+
+from napari_picasso.picasso import nn_picasso
 import matplotlib.pyplot as plt
 import imageio
 import numpy as np
