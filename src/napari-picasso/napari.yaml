@@ -1,0 +1,9 @@
+name: napari-picasso
+contributions:
+  commands:
+    - id: picasso.napari_picasso
+      title: PICASSO
+      python_name: picasso:napari_picasso
+  widgets:
+    - command: picasso.napari_picasso  # note, same as command.id above
+      display_name: PICASSO

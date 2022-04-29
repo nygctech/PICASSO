@@ -1,6 +1,5 @@
 
 import dask.array as da
-import xarray as xr
 import numpy as np
 
 import torch
@@ -19,7 +18,11 @@ import mine
 
 DA_TYPE = type(da.zeros(0))
 NP_TYPE = type(np.zeros(0))
-XR_TYPE = type(xr.DataArray([0]))
+try:
+    import xarray as xr
+    XR_TYPE = type(xr.DataArray([0]))
+except:
+    XR_TYPE = None
 
 class PICASSOnn(nn.Module):
     def __init__(self, mixing_matrix,
