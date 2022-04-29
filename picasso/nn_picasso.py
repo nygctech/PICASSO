@@ -3,10 +3,18 @@ import dask.array as da
 import xarray as xr
 import numpy as np
 
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
 from dask.utils import format_bytes
 import psutil
 from math import ceil
 from typing import Union
+
+import sys
+sys.path.append('C:\\Users\\kpandit\\PICASSO\\picasso')
+import mine
 
 
 DA_TYPE = type(da.zeros(0))
@@ -26,14 +34,16 @@ class PICASSOnn(nn.Module):
             self.device = 'cuda'
         else:
             self.device = 'cpu'
-
+        print('Using', self.device)
         self.mixing_matrix = torch.tensor(mixing_matrix, device = self.device)
         self.pairs = self.mixing_matrix                                         # Pairs property take mixing matrix as input to set
 
         self.bit_depth = px_bit_depth
 
         if transform is None:
-            self.transform = MixModel(self.n_images, self.n_sinks, self.mixing_matrix, background)
+            self.transform = MixModel(self.n_images, self.n_sinks,
+                                      self.mixing_matrix, background = background,
+                                      device=self.device)
         else:
             self.transform = transform
         self.transform.to(self.device)
@@ -69,7 +79,7 @@ class PICASSOnn(nn.Module):
         ''' images NxC: N = number of px, C = number of channels'''
 
         # Remove spillover spectras in sink images
-        no_spill = self.transform(images)
+        no_spill = self.transform.forward(images)
 
         # Keep contrast of sink image the same
         self.c_loss = self.contrast_loss(images[:,self.sink_ind], no_spill)*self.contrast_weight
@@ -102,7 +112,7 @@ class PICASSOnn(nn.Module):
 
 
 
-    def train_loop(self, images, max_iter=40, batch_size=500, lr=1e-4, opt=None, **kwargs):
+    def train_loop(self, images, max_iter=40, batch_size=500, lr=1e-3, opt=None, **kwargs):
 
         mix_params = [self.transform.alpha]
         bg_params = [self.transform.background]
@@ -110,7 +120,7 @@ class PICASSOnn(nn.Module):
 
         if opt is None:
             opt = torch.optim.Adam([{'params':self.mine_params, 'lr':lr},
-                                    {'params':mix_params, 'lr': lr/10},
+                                    {'params':mix_params, 'lr': lr/3},
                                     {'params':bg_params, 'lr': lr/10}
                                    ])
 
@@ -122,7 +132,7 @@ class PICASSOnn(nn.Module):
 
         for i in range(1, max_iter + 1):
 
-            dataloader = DataLoader(dataset, shuffle=True, collate_fn = dask_collate, pin_memory=True))
+            dataloader = DataLoader(dataset, shuffle=True, collate_fn = self.dask_collate)
             batch_loss = 0; batch_mi_loss = 0; batch_contrast_loss = 0
             for batch, im_list in enumerate(dataloader):
 
@@ -151,15 +161,13 @@ class PICASSOnn(nn.Module):
                 mi_loss_.append(mi_loss.tolist())
                 contrast_loss_.append(contrast_loss.tolist())
 
-                if b_mi_loss == 0:
-                    break
 
             loss_ = np.array([batch_loss, batch_mi_loss, batch_contrast_loss])
             loss_ /= batch
             if i % (max_iter // 10) == 0:
                 print(f"It {i} - total loss: {loss_[0]}, total MI loss: {loss_[1]}, total contrast loss: {loss_[2]}")
 
-            if b_mi_loss == 0:
+            if loss_[1] == 0:
                 break
 
         train_info = {'mutual information loss': mi_loss_,
@@ -184,6 +192,7 @@ class PICASSOnn(nn.Module):
 
             for i in images:
                 im_type_ = type(i)
+                #TODO check if generic array type instead of numpy array
                 if im_type_ is NP_TYPE:
                     im_stack.append(da.from_array(i).flatten())
                 elif im_type_ is DA_TYPE:
@@ -193,7 +202,7 @@ class PICASSOnn(nn.Module):
         #Handle 3D array of images
             #TODO handle n dim
             assert images.ndim == 3, f'3D stack of images, with dim 0 as the stack dimension'
-            n_im, row, cols = images.shape
+            n_im, rows, cols = images.shape
             dtype = images.dtype
 
             if im_type is XR_TYPE:
@@ -208,7 +217,6 @@ class PICASSOnn(nn.Module):
         else:
             raise TypeError('Did not recognize images')
 
-
         dataset = da.stack(im_stack, axis=1)
 
         return PICASSO_Dataset(dataset, rows, cols, dtype, px_per_chunk=batch_size)
@@ -219,22 +227,22 @@ class PICASSOnn(nn.Module):
 
         n_ims = len(images)
         dataset = self.get_dataset(images)
+        dataloader = DataLoader(dataset, collate_fn = self.dask_collate)
 
         batches = []
-        for im in DataLoader(dataset, batch_size):
+        for im in dataloader:
             if len(im) == 1:
                 im = im[0]
             else:
                 im = torch.cat(im, dim=0)
-            batches.append(da.from_array(self.transform(im)))
+            batches.append(da.from_array(self.transform(im).cpu().detach().numpy()))
         unmixed = da.concatenate(batches, axis=0)
 
-        unmixed_
+        unmixed_ = []
         px, n_ims = unmixed.shape
         for i in range(n_ims):
-            im = unmixed_ims[:,i].reshape(dataset.rows,dataset.cols)
-            unmixed_.append(im*dataset.max_px).astype(dataset.dtype)
-
+            im = unmixed[:,i].reshape(dataset.rows,dataset.cols)
+            unmixed_.append((im*dataset.max_px).astype(dataset.dtype))
 
         return da.stack(unmixed_, axis = 0)
 
@@ -314,13 +322,14 @@ class PICASSOnn(nn.Module):
 
 
 class MixModel(nn.Module):
-    def __init__(self, images:int, sinks:int, mixing_matrix, background: bool = True,
-                 min_alpha:float = 0.01, max_alpha:float = 2.0, max_background:float = 0.1):
+    def __init__(self, images:int, sinks:int, mixing_matrix, device='cpu', background: bool = True,
+                 min_alpha:float = 0.01, max_alpha:float = 2.0, max_background:float = 0.2):
 
         super().__init__()
 
         assert (images, sinks) == mixing_matrix.shape, f'Mixing matrix rows should = images, and cols should = sinks'
 
+        self.device = device
         self.mixing_matrix = mixing_matrix
         self.bg = background
         self.min_alpha = min_alpha
@@ -331,10 +340,10 @@ class MixModel(nn.Module):
 
         self.Hardtanh = nn.Hardtanh(min_val=0.0, max_val=1.0)
 
-        self.alpha = nn.Parameter(torch.ones((images, sinks), dtype=torch.float32)/2)
+        self.alpha = nn.Parameter(torch.ones((images, sinks), dtype=torch.float32)/1)
 
         if background:
-            self.background = nn.Parameter(torch.zeros((images, sinks), dtype=torch.float32))
+            self.background = nn.Parameter(torch.ones((images, sinks), dtype=torch.float32)/100)
 
         self.constrain()
 
@@ -344,7 +353,8 @@ class MixModel(nn.Module):
 
         assert images == self.images, f'Expected {self.images} images, got {images}'
 
-        y = torch.zeros((px, self.sinks), dtype = torch.float32)
+        y = torch.zeros((px, self.sinks), dtype = torch.float32, device = self.device)
+
         if self.bg:
             for i in range(self.sinks):
                 y[:,i] = self.Hardtanh(x-self.background[:,i].T) @ (self.alpha[:,i]*self.mixing_matrix[:,i])
@@ -388,7 +398,7 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
         super().__init__()
 
         # Get info about dataset
-        self.rows = rows, self.cols = cols, self.dtype = dtype                  # height, width, and dtype of images
+        self.rows = rows; self.cols = cols; self.dtype = dtype                  # height, width, and dtype of images
         self.max_px = dataset.max().compute()                                   # max pixel value in images
         self.dataset = dataset.astype('float32')/self.max_px                    # pixels normalized to 1
         self.blocks_per_image, self.n_images = dataset.blocks.shape             # chunk/blocks in each image, number of images
@@ -407,7 +417,7 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
             if torch.cuda.is_available():
                 self.device = 'cuda'
                 self.gpu_prop = torch.cuda.get_device_properties('cuda')
-                self.memory_size = self.gpu_mem.total_memory
+                self.memory_size = self.gpu_prop.total_memory
             else:
                 self.device = 'cpu'
                 self.sys_prop = psutil.virtual_memory()

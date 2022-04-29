@@ -28,7 +28,6 @@ class MINE(nn.Module):
             self.device = 'cuda'
         else:
             self.device = 'cpu'
-        print('Using '+self.device)
         self.T.to(self.device)
 
 
