@@ -1,7 +1,7 @@
 from magicgui.widgets import PushButton, FloatSlider, Container, ComboBox, FunctionGui
 from napari.types import ImageData
 
-class picasso_widget(Container):
+class PicassoWidget(Container):
     '''Main picasso widget.'''
 
     def __init__(self, viewer: 'napari.viewer.Viewer'):
