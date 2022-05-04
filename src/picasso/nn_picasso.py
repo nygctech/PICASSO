@@ -181,7 +181,6 @@ class PICASSOnn(nn.Module):
 
     def get_dataset(self, images, batch_size=-1):
 
-
         im_type = type(images)
 
         im_stack = []
@@ -189,6 +188,7 @@ class PICASSOnn(nn.Module):
         # Handle iterable of images
             assert images[0].ndim == 2, f'Expected iterable of 2D images'
             n_im = len(images)
+            assert n_im == self.n_images f'Expected {self.n_images}, got {n_im}'
             rows, cols = images[0].shape
             dtype = images[0].dtype
 
@@ -205,6 +205,7 @@ class PICASSOnn(nn.Module):
             #TODO handle n dim
             assert images.ndim == 3, f'3D stack of images, with dim 0 as the stack dimension'
             n_im, rows, cols = images.shape
+            assert n_im == self.n_images f'Expected {self.n_images}, got {n_im}'
             dtype = images.dtype
 
             if im_type is XR_TYPE:
@@ -300,13 +301,14 @@ class PICASSOnn(nn.Module):
 
         n_src, n_snk = mm.shape
         assert n_snk >= n_src, f'Number of sinks {n_snk} must be >= number of sources {n_src}'
-        if n_src == n_snk:
-            assert (mm.diagonal() == 1).all(), f'Diagonal of mixing matrix should be 1s'
-            off_diag = mm[~torch.eye(mm.shape[0],dtype=bool)]
-            assert ((off_diag==0) | (off_diag==-1)).all(), f'Off diagonal of mixing matrix should be -1s or 0s'
-        else:
-            assert ((mm==0) | (mm==-1) | (mm==1)).all(), f'Mixing matrix should only include -1s, 0s, or 1s'
+        # if n_src == n_snk:
+        #     assert (mm.diagonal() == 1).all(), f'Diagonal of mixing matrix should be 1s'
+        #     off_diag = mm[~torch.eye(mm.shape[0],dtype=bool)]
+        #     assert ((off_diag==0) | (off_diag==-1)).all(), f'Off diagonal of mixing matrix should be -1s or 0s'
+        # else:
+        #     assert ((mm==0) | (mm==-1) | (mm==1)).all(), f'Mixing matrix should only include -1s, 0s, or 1s'
 
+        mm[mm < 0] = -1                                                         #Mark source images as -1
         assert (mm==1).sum(axis=1).all() <= 1, f'Only 1 image can be marked as a sink per column in the mixing matrix'
 
         # Remove unused sources

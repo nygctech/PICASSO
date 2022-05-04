@@ -1,6 +1,7 @@
 from magicgui.widgets import PushButton, FloatSlider, Container, ComboBox, FunctionGui
 from napari.types import ImageData
 
+
 class PicassoWidget(Container):
     '''Main picasso widget.'''
 
@@ -31,6 +32,8 @@ class PicassoWidget(Container):
 
         self.changed.connect(self.get_mixing_params)
 
+        self.picasso_params = None
+
 
     def add_sink_widget(self: Container) -> None:
 
@@ -46,7 +49,14 @@ class PicassoWidget(Container):
         print('Open options not implemented yet')
 
     def run_picasso(self: Container):
-        print('Run picasso not implemented yet')
+        from picasso import PICASSOnn
+
+        mm = self.mixing_matrix
+        model = PICASSOnn(mm)
+        model.train_loop(self.images)
+        self.mixing_matrix = model.get_parameters()                             #set mixing parameters
+        self.unmix_images()                                                     #unmix images and add new layer
+
 
     @property
     def sinks(self: Container) -> [int]:
@@ -59,15 +69,93 @@ class PicassoWidget(Container):
         self._sinks.append(index)
 
 
-    def get_mixing_params(self) -> {ImageData:{ImageData:float}}:
+    @property
+    def mixing_dict(self):
         '''Dictionary of mixing parameters. source : sink : alpha'''
 
-        mp = {}
+        sources = {}
         for s in self.sinks:
             sink = self[f'sink{s}']
             mp[sink.sink_list.value] = sink.mixing_params
 
-        self.mixing_params = mp
+        self._mixing_dict = mp
+        return mp
+
+    @property
+    def mixing_matrix(self):
+        '''Get unsorted mixing matrix from mixing dictionary.
+
+            columns of mixing matrix are unmixed sinks, rows are images
+            1 sink image per column labeled with 1
+            source images in column labeled with value < 0
+
+        '''
+
+        mixdict = self.mixing_dict                                              # dictionary = {sink image :{source image: mixing param}}
+        images = self.images                                                    # list of images selected as sink or source
+
+        mm = np.zeros((2, len(images), len(mixdict)))
+        for i, sink in enumerate(mixdict.keys()):
+            for ii, source in enumerate(images):
+                mix_params  = mix_dict[sink].get(source, {'alpha':0})
+                if mix_params['alpha'] > 0 and sink is not source:
+                    mm[0,ii,i] = -mix_param['alpha']
+                    mm[1,ii,i] = mix_param.get('background', 0)
+                elif mix_params == 0 and sink is source:
+                    mm[ii,i] = 1
+
+        if mm[1,:,:].sum() == 0:                                                # Remove background if not used
+            mm = mm[0,:,:]
+
+        self._mixing_matrix = mm
+
+        return mm
+
+
+    @mixing_matrix.setter
+    def mixing_matrix(self, mm):
+
+        mixdict = self.mixing_dict
+        images = self.images
+
+        BG = False
+        if mm.ndim == 3
+            BG = True
+        elif mm.ndim == 2:
+            mm = np.expand_dims(mm,axis=0)
+
+        nsources, nsinks = mm.shape
+        if len(mix_dict) != nsinks or len(sources) != nsources:
+            raise ValueError, f'Mismatch between number of selectred sink and source images and mixing matrix, try rerunning PICASSO'
+
+        for i, sink in enumerate(mixdict.keys()):
+            for ii, source in enumerate(images):
+                if mix_param < 0 and sink is not source:
+                    mix_dict[sink][source]['alpha'] = mm[0,ii,i]
+                    if BG:
+                        mix_dict[sink][source]['background'] = mm[1,ii,i]
+
+        self._mixing_matrix = mm
+
+
+    @property
+    def images(self):
+        'List of source image names'
+
+        mixdict = self.mixing_dict
+        images = dict()
+
+        for sink in mixdict.keys():
+            images.update({sink:None})
+
+        for sinksource in mix_dict.values():
+            for source in sinksource.keys():
+                images.update({source:None})
+
+        self._images = list(images)
+
+        return self._images
+
 
 
 
