@@ -43,7 +43,7 @@ class PicassoWidget(Container):
             i += 1
 
         self.sinks = i
-        self.append(SinkWidget(i, self._viewer.layers))
+        self.append(SinkWidget(i, self._viewer.layers, BG = self.BG))
 
 
     def open_options(self: Container):
@@ -194,7 +194,7 @@ class PicassoWidget(Container):
 class SinkWidget(Container):
     '''Container to select sink image and spectra spillover source images.'''
 
-    def __init__(self, index, images):
+    def __init__(self, index, images, BG: bool = False):
 
         sink_list = ComboBox(choices = images, name = f'sinklist{index}', label=f'sink{index}')
         sink_list.max_width = 175
@@ -221,13 +221,14 @@ class SinkWidget(Container):
         self.current_src_opts = None                                            # source options widget
         self.n_sources = 0                                                      # Number of sources that spillover
         self._images = images                                                   # List of images in napari
+        self.BG = BG                                                            # Flag to show background parameter
 
 
     def show_sources(self) -> None:
         '''Show widget to select source images.'''
 
         if self.current_src_opts is None:
-            self.current_src_opts = SourceOptions(self.source_images(), self.mixing_params)
+            self.current_src_opts = SourceOptions(self.source_images(), self.mixing_params, self.BG)
             self.current_src_opts.changed.connect(self.update_mixing_params)
 
         self.current_src_opts.show()
@@ -254,8 +255,6 @@ class SinkWidget(Container):
             src_imgs.remove(sink_img)
 
         return src_imgs
-
-        return mp
 
 
 
@@ -287,7 +286,8 @@ class _SourceList(Container):
 class SourceWidget(Container):
     '''Select single source image and alpha mixing parameter pair.'''
 
-    def __init__(self, images: [ImageData], index: int = 0, alpha: float = 0.0, **kwargs):
+    def __init__(self, images: [ImageData], index: int = 0, alpha: float = 0.0,
+                       background: float = 0.0, BG: bool = False):
 
         self.index = index                                                      # Source index, int
 
@@ -299,6 +299,14 @@ class SourceWidget(Container):
         alpha_slider.max_width = 175
         self.alpha = alpha_slider
 
+        self.min_px, self.max_px = self.source_list.source_list.value.contrast_value
+        self.step = 1 if max_px > 1 else 0.01
+        bg_slider = FloatSlider(min = self.min_px, max=self.max_px, step=self.step,
+                                name=f'background{index}', value = background,
+                                tracking = False, visible = BG)
+        bg_slider.max_width = 175
+        self.background = bg_slider
+
         super().__init__(
                          name=f'source{index}',
                          labels = False
@@ -306,6 +314,8 @@ class SourceWidget(Container):
 
         self.append(source_list)
         self.append(alpha_slider)
+        self.append(bg_slider)
+
 
 
     def delete_source(self) -> None:
@@ -322,16 +332,32 @@ class SourceWidget(Container):
 
         img = self.source_list.source_list.value
         alpha = self.alpha.value
+        background = self.background.value
 
-        return img, alpha
+        return img, alpha, background
+
+    def update_bg_slider(self):
+        '''Update max, min, and step values of background slider.'''
+
+        self.min_px, self.max_px = self.source_list.source_list.value.contrast_value
+        self.step = 1 if max_px > 1 else 0.01
+
+        if self.background.max != self.max_px:
+            self.background.max = self.max_px
+        if self.background.min != self.min_px:
+            self.background.min = self.min_px
+        if self.background.step != self.step:
+            self.background.step = self.step
 
 
 
 class SourceOptions(Container):
     '''Define multiple source image and alpha pairs that spill over into the sink image.'''
 
-    def __init__(self, images: [ImageData], index: int = 0,  mixing_params: dict = {}):
+    def __init__(self, images: [ImageData], index: int = 0,  mixing_params: dict = {}, BG: bool = False):
 
+        self._images = images                                                   # List of possible source images
+        self.BG = BG
 
         add_source_btn = PushButton(name=f'addsrc', label = '+')
         add_source_btn.max_width = 30
@@ -344,16 +370,13 @@ class SourceOptions(Container):
                         )
 
         if bool(mixing_params):
-            self.add_source()
+            self.add_source(BG = BG)
         else:
             for sink_im, alpha in mixing_params.items():
-                add_source(alpha, value = sink_im)
-
-        self._images = images                                                   # List of possible source images
+                self.add_source(alpha, background, value = sink_im, BG = BG)
 
 
-
-    def add_source(self, alpha: float = 0.0, **kwargs) -> None:
+    def add_source(self, alpha: float = 0.0, background: float = 0.0) -> None:
         '''Add new source widget.'''
 
         i = 0
@@ -361,11 +384,11 @@ class SourceOptions(Container):
             i += 1
 
         self.sources = i
-        src = SourceWidget(self._images, i, alpha, **kwargs)
+        src = SourceWidget(self._images, i, alpha, background, BG = self.BG, **self.kwargs)
 
         src[f'source_list{i}'][f'source{i}'].changed.connect(self.__call__)
         src[f'alpha{i}'].changed.connect(self.__call__)
-
+        src[f'background{i}'].changed.connect(self.__call__)
         self.insert(i+1,src)
 
         self.__call__()
@@ -388,7 +411,8 @@ class SourceOptions(Container):
 
         mp = {}
         for s in self.sources:
-            img, alpha = self[f'source{s}'].mixing_param
-            mp[img] = alpha
+            self[f'source{s}'].update_bg_slider()
+            img, alpha, background = self[f'source{s}'].mixing_param
+            mp[img] = {'alpha':alpha, 'background':background}
 
         return mp
