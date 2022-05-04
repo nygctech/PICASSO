@@ -1,6 +1,8 @@
 
 import dask.array as da
 import numpy as np
+from napari.types import
+from napari.layers import Image
 
 import torch
 import torch.nn as nn
@@ -16,7 +18,9 @@ from ../mine import mine
 
 
 DA_TYPE = type(da.zeros(0))
-NP_TYPE = type(np.zeros(0))
+#NP_TYPE = type(np.zeros(0))
+IL_TYPE = type(Image(np.zeros((1,1))))
+
 try:
     import xarray as xr
     XR_TYPE = type(xr.DataArray([0]))
@@ -131,6 +135,7 @@ class PICASSOnn(nn.Module):
         contrast_loss_ = []
 
         dataset = self.get_dataset(images, batch_size = batch_size)
+        self.max_px = dataset.max_px
 
         for i in range(1, max_iter + 1):
 
@@ -179,7 +184,8 @@ class PICASSOnn(nn.Module):
 
         return train_info
 
-    def get_dataset(self, images, batch_size=-1):
+    def get_dataset(self, images, batch_size=-1, ch_dim=0):
+        'Format images so that are flattened and stacked in columns by channel'
 
         im_type = type(images)
 
@@ -194,31 +200,47 @@ class PICASSOnn(nn.Module):
 
             for i in images:
                 im_type_ = type(i)
-                #TODO check if generic array type instead of numpy array
-                if im_type_ is NP_TYPE:
+
+                if im_type in [IL_TYPE, XR_TYPE]:
+                    i = i.data
+                    im_type_ = type(i)
+
+                if im_type_ is not DA_TYPE:
                     im_stack.append(da.from_array(i).flatten())
-                elif im_type_ is DA_TYPE:
+                else:
                     im_stack.append(i.flatten())
 
-        elif im_type in [DA_TYPE, XR_TYPE, NP_TYPE]:
-        #Handle 3D array of images
-            #TODO handle n dim
-            assert images.ndim == 3, f'3D stack of images, with dim 0 as the stack dimension'
-            n_im, rows, cols = images.shape
+        else:
+        # Hanndle array of images with channel dimension at the first or last axis
+            dim_shape = images.shape
+            if ch_dim == 0:
+            # assume if channel first, row and cols are the last 2 axis
+                n_im = dim_shape[0], rows = dim_shape[-2], cols = dim_shape[-1]
+            elif ch_im == -1:
+            # assume if channel last, row and cols are the first 2 axis
+                n_im = dim_shape[-1], rows = dim_shape[0], cols = dim_shape[1]
+            else:
+                raise ValueError(f'expected ch_dim to be 0 or -1, got {ch_dim}')
+
             assert n_im == self.n_images f'Expected {self.n_images}, got {n_im}'
             dtype = images.dtype
 
-            if im_type is XR_TYPE:
+            # Handle xarray wrapped arrays
+            if im_type is XR_TYPE
                 images = images.data
                 im_type = type(images)
 
             for i in range(n_im):
-                if im_type is NP_TYPE:
-                    im_stack.append(da.from_array(images[i,:,:]).flatten())
-                elif im_type is DA_TYPE:
-                    im_stack.append(images[i,:,:].flatten())
-        else:
-            raise TypeError('Did not recognize images')
+                if ch_dim == 0:
+                    if im_type is not DA_TYPE:
+                        im_stack.append(da.from_array(images[i,...]).flatten())
+                    elif im_type is DA_TYPE:
+                        im_stack.append(images[i,...].flatten())
+                else:
+                    if im_type is not DA_TYPE:
+                        im_stack.append(da.from_array(images[...,i]).flatten())
+                    elif im_type is DA_TYPE:
+                        im_stack.append(images[...,i].flatten())
 
         dataset = da.stack(im_stack, axis=1)
 
@@ -324,6 +346,18 @@ class PICASSOnn(nn.Module):
         self.n_images, self.n_sinks = self._mixing_matrix.shape
 
 
+    @property
+    def mixing_parameters(self):
+
+        alpha = (self.mixing_matrix * self.transform.alpha).detach().cpu()
+            if transform.bg:
+                bg = self.transform.background * self.max_px
+                self._mixing_parameters = np.stack([alpha, background.detach().cpu()])
+            else:
+                self._mixing_parameters = alpha
+
+        return self._mixing_parameters
+
 
 class MixModel(nn.Module):
     def __init__(self, images:int, sinks:int, mixing_matrix, device='cpu', background: bool = True,
@@ -381,15 +415,6 @@ class MixModel(nn.Module):
             background[(self.mixing_matrix == 1) | (self.mixing_matrix == 0)] = 0.0
             self.background.data = background
 
-    def get_parameters(self):
-
-        params = []
-        for i in range(self.images):
-            for ii in range(self.sinks):
-                if self.mixing_matrix[i,ii] == -1:
-                    params.append([self.alpha[i,ii], self.background[i,ii]])
-
-        return torch.tensor(params)
 
 
 

@@ -33,6 +33,7 @@ class PicassoWidget(Container):
         self.changed.connect(self.get_mixing_params)
 
         self.picasso_params = None
+        self.BG = True
 
 
     def add_sink_widget(self: Container) -> None:
@@ -54,9 +55,39 @@ class PicassoWidget(Container):
         mm = self.mixing_matrix
         model = PICASSOnn(mm)
         model.train_loop(self.images)
-        self.mixing_matrix = model.get_parameters()                             #set mixing parameters
+        self.mixing_matrix = model.mixing_parameters                            #get mixing parameters
         self.unmix_images()                                                     #unmix images and add new layer
 
+    def unmix_images(self):
+
+        mm = self.mixing_matrix
+        images = self.images
+
+        if self.BG:
+            assert mm.ndim == 3
+            alpha = mm[0,:,:]
+            bg = mm[1,:,:]
+        else:
+            assert mm.ndim == 2
+            alpha = mm
+
+        nsinks, nimages = alpha.shape
+        assert len(images) == nimages, f'Expected {nimages}, got {len(images)}'
+
+        fimages_ = []
+        for im in images:
+            fimages_.append(im.data.flatten())
+        fimages = da.stack(fimages_, axis=1)
+
+        for i in range(nsinks):
+            sink_ind = np.where(mm[:,i] == 1)[0][0]
+            layer_info = images[sink_ind].as_layer_data_tuple()[1]
+            layer_info['name'] = 'unmixed_' + layer_info['name']
+            if self.BG:
+                unmixed = (fimages - bg[:,i].T) @ alpha[:,i]
+            else:
+                unmixed = fimages @ alpha[:,i]
+            self.viewer.add_image(unmixed, **layer_info)
 
     @property
     def sinks(self: Container) -> [int]:
@@ -118,21 +149,21 @@ class PicassoWidget(Container):
         mixdict = self.mixing_dict
         images = self.images
 
-        BG = False
-        if mm.ndim == 3
-            BG = True
-        elif mm.ndim == 2:
+        if self.BG:
+            assert mm.ndim == 3
+        else:
+            assert mm.ndim == 2
             mm = np.expand_dims(mm,axis=0)
 
         nsources, nsinks = mm.shape
         if len(mix_dict) != nsinks or len(sources) != nsources:
-            raise ValueError, f'Mismatch between number of selectred sink and source images and mixing matrix, try rerunning PICASSO'
+            raise ValueError(f'Mismatch between number of selected sink and source images and mixing matrix, try rerunning PICASSO')
 
         for i, sink in enumerate(mixdict.keys()):
             for ii, source in enumerate(images):
                 if mix_param < 0 and sink is not source:
-                    mix_dict[sink][source]['alpha'] = mm[0,ii,i]
-                    if BG:
+                    mix_dict[sink][source]['alpha'] = -mm[0,ii,i]
+                    if self.BG:
                         mix_dict[sink][source]['background'] = mm[1,ii,i]
 
         self._mixing_matrix = mm
