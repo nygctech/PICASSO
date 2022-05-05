@@ -1,14 +1,15 @@
 from napari_picasso.widgets import PicassoWidget
 import numpy as np
 import napari
+from skimage.data import astronaut
 
 
 # make_napari_viewer is a pytest fixture that returns a napari viewer object
 # capsys is a pytest fixture that captures stdout and stderr output streams
-def test_picasso_widgete(make_napari_viewer, capsys):
+def test_picasso_widget(make_napari_viewer, capsys):
     # make viewer and add an image layer using our fixture
     viewer = make_napari_viewer()
-    viewer.add_image(np.random.random((100, 100)))
+    viewer.add_image(astronaut(), channel_axis=2)
 
     # create our widget, passing in the viewer
     my_widget = PicassoWidget(viewer)

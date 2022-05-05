@@ -30,7 +30,7 @@ class PicassoWidget(Container):
         self.mixing_params = {}                                                 # Current mixing paramers {sink : {source:alpha}}
         self._viewer = viewer                                                   # napari viewer
 
-        self.changed.connect(self.get_mixing_params)
+        #self.changed.connect(self.get_mixing_params)
 
         self.picasso_params = None
         self.BG = True
@@ -110,7 +110,7 @@ class PicassoWidget(Container):
             mp[sink.sink_list.value] = sink.mixing_params
 
         self._mixing_dict = mp
-        return mp
+
 
     @property
     def mixing_matrix(self):
@@ -228,7 +228,7 @@ class SinkWidget(Container):
         '''Show widget to select source images.'''
 
         if self.current_src_opts is None:
-            self.current_src_opts = SourceOptions(self.source_images(), self.mixing_params, self.BG)
+            self.current_src_opts = SourceOptions(self.source_images(), self.mixing_params, BG = self.BG)
             self.current_src_opts.changed.connect(self.update_mixing_params)
 
         self.current_src_opts.show()
@@ -287,7 +287,7 @@ class SourceWidget(Container):
     '''Select single source image and alpha mixing parameter pair.'''
 
     def __init__(self, images: [ImageData], index: int = 0, alpha: float = 0.0,
-                       background: float = 0.0, BG: bool = False):
+                       background: float = 0.0, BG: bool = False, **kwargs):
 
         self.index = index                                                      # Source index, int
 
@@ -299,13 +299,12 @@ class SourceWidget(Container):
         alpha_slider.max_width = 175
         self.alpha = alpha_slider
 
-        self.min_px, self.max_px = self.source_list.source_list.value.contrast_value
-        self.step = 1 if max_px > 1 else 0.01
-        bg_slider = FloatSlider(min = self.min_px, max=self.max_px, step=self.step,
-                                name=f'background{index}', value = background,
+
+        bg_slider = FloatSlider(name=f'background{index}', value = background,
                                 tracking = False, visible = BG)
         bg_slider.max_width = 175
         self.background = bg_slider
+        self.update_bg_slider()
 
         super().__init__(
                          name=f'source{index}',
@@ -334,13 +333,18 @@ class SourceWidget(Container):
         alpha = self.alpha.value
         background = self.background.value
 
+        self._mixing_param = (img, alpha, background)
+
         return img, alpha, background
 
     def update_bg_slider(self):
         '''Update max, min, and step values of background slider.'''
 
-        self.min_px, self.max_px = self.source_list.source_list.value.contrast_value
-        self.step = 1 if max_px > 1 else 0.01
+        try:
+            self.min_px, self.max_px = self.source_list.source_list.value.contrast_limits
+        except AttributeError:
+            self.min_px = 0; self.max_px = 1000
+        self.step = 1 if self.max_px > 1 else 0.01
 
         if self.background.max != self.max_px:
             self.background.max = self.max_px
@@ -369,14 +373,15 @@ class SourceOptions(Container):
                          labels = False
                         )
 
-        if bool(mixing_params):
-            self.add_source(BG = BG)
-        else:
-            for sink_im, alpha in mixing_params.items():
-                self.add_source(alpha, background, value = sink_im, BG = BG)
+        self.add_source()
+        # if bool(mixing_params):
+        #     self.add_source()
+        # else:
+        #     for sink_im, alpha in mixing_params.items():
+        #         self.add_source(alpha, background, value = sink_im)
 
 
-    def add_source(self, alpha: float = 0.0, background: float = 0.0) -> None:
+    def add_source(self, alpha: float = 0.0, background: float = 0.0, **kwargs) -> None:
         '''Add new source widget.'''
 
         i = 0
@@ -384,7 +389,7 @@ class SourceOptions(Container):
             i += 1
 
         self.sources = i
-        src = SourceWidget(self._images, i, alpha, background, BG = self.BG, **self.kwargs)
+        src = SourceWidget(self._images, i, alpha, background, BG = self.BG, **kwargs)
 
         src[f'source_list{i}'][f'source{i}'].changed.connect(self.__call__)
         src[f'alpha{i}'].changed.connect(self.__call__)
