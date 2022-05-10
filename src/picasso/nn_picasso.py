@@ -1,7 +1,6 @@
 
 import dask.array as da
 import numpy as np
-from napari.types import
 from napari.layers import Image
 
 import torch
@@ -13,12 +12,12 @@ import psutil
 from math import ceil
 from typing import Union
 
-from ../mine import mine
+from mine.mine import MINE
 
 
 
 DA_TYPE = type(da.zeros(0))
-#NP_TYPE = type(np.zeros(0))
+NP_TYPE = type(np.zeros(0))
 IL_TYPE = type(Image(np.zeros((1,1))))
 
 try:
@@ -58,7 +57,7 @@ class PICASSOnn(nn.Module):
         self.mine_ = []                                                         # initialize list of mutual information neural estimators (MINE)
         self.mine_params = []                                                   # initialize list of parameters for each MINE
         for i in range(self.n_pairs):
-            self.mine_.append(mine.MINE(neurons = px_bit_depth))
+            self.mine_.append(MINE(neurons = px_bit_depth))
             for param in self.mine_[-1].parameters():
                 self.mine_params.append(param)
         self.mi_loss = torch.zeros((self.n_pairs,), requires_grad = False, device = self.device)
@@ -194,7 +193,7 @@ class PICASSOnn(nn.Module):
         # Handle iterable of images
             assert images[0].ndim == 2, f'Expected iterable of 2D images'
             n_im = len(images)
-            assert n_im == self.n_images f'Expected {self.n_images}, got {n_im}'
+            assert n_im == self.n_images, f'Expected {self.n_images}, got {n_im}'
             rows, cols = images[0].shape
             dtype = images[0].dtype
 
@@ -222,11 +221,11 @@ class PICASSOnn(nn.Module):
             else:
                 raise ValueError(f'expected ch_dim to be 0 or -1, got {ch_dim}')
 
-            assert n_im == self.n_images f'Expected {self.n_images}, got {n_im}'
+            assert n_im == self.n_images, f'Expected {self.n_images}, got {n_im}'
             dtype = images.dtype
 
             # Handle xarray wrapped arrays
-            if im_type is XR_TYPE
+            if im_type is XR_TYPE:
                 images = images.data
                 im_type = type(images)
 
@@ -309,7 +308,7 @@ class PICASSOnn(nn.Module):
         return self._mixing_matrix
 
     @mixing_matrix.setter
-    def mixing_matrix(self, mm):
+    def mixing_matrix(self, mm: NP_TYPE):
         '''Check and set the mixing matrix.
 
            rows = all images
@@ -321,6 +320,9 @@ class PICASSOnn(nn.Module):
 
         '''
 
+        assert mm.ndim in [1,2], f'Expected 2D mixing matrix, got {mm.ndim}'
+        if mm.ndim == 1:
+            mm = np.expand_dims(mm, -1)
         n_src, n_snk = mm.shape
         assert n_snk >= n_src, f'Number of sinks {n_snk} must be >= number of sources {n_src}'
         # if n_src == n_snk:
@@ -334,12 +336,12 @@ class PICASSOnn(nn.Module):
         assert (mm==1).sum(axis=1).all() <= 1, f'Only 1 image can be marked as a sink per column in the mixing matrix'
 
         # Remove unused sources
-        mm = mm[~((mm==0).sum(dim=0) == n_snk)]
+        #mm = mm[~((mm==0).sum(axis=1) == 0)]
         # Remove unused sinks
-        mm = mm[~((mm==0).sum(dim=1) == n_src)]
+        #mm = mm[~((mm==1).sum(axis=0) == 1)]
 
-        self.source_ind = ~(mm.sum(dim=1) == 1)
-        self.sink_ind = (mm==-1).sum(dim=0) >= 1
+        #self.source_ind = ~(mm.sum(axis=1) == 1)
+        self.sink_ind = ((mm==-1).sum(axis=0) >= 1) and ((mm==1).sum(axis=0) == 1)
 
         # Get images x sink mixing matrix (columns have 1 sink and at least one source image)
         self._mixing_matrix = mm[:, self.sink_ind]
@@ -350,11 +352,11 @@ class PICASSOnn(nn.Module):
     def mixing_parameters(self):
 
         alpha = (self.mixing_matrix * self.transform.alpha).detach().cpu()
-            if transform.bg:
-                bg = self.transform.background * self.max_px
-                self._mixing_parameters = np.stack([alpha, background.detach().cpu()])
-            else:
-                self._mixing_parameters = alpha
+        if transform.bg:
+            bg = self.transform.background * self.max_px
+            self._mixing_parameters = np.stack([alpha, background.detach().cpu()])
+        else:
+            self._mixing_parameters = alpha
 
         return self._mixing_parameters
 
