@@ -1,13 +1,15 @@
 from magicgui.widgets import PushButton, FloatSlider, Container, ComboBox, FunctionGui
 from napari.types import ImageData
-
+import numpy as np
+from napari_picasso.utils import get_layer_info
+import dask.array as da
 
 class PicassoWidget(Container):
     '''Main picasso widget.'''
 
-    def __init__(self, viewer: 'napari.viewer.Viewer'):
+    def __init__(self, viewer: 'napari.viewer.Viewer', **kwargs):
 
-        super().__init__()
+        super().__init__(**kwargs)
 
         # Header buttons
         add_sink_btn = PushButton(text="+sink", name="add_snk")
@@ -49,12 +51,12 @@ class PicassoWidget(Container):
     def open_options(self: Container):
         print('Open options not implemented yet')
 
-    def run_picasso(self: Container):
-        from picasso import PICASSOnn
+    def run_picasso(self: Container, **kwargs):
+        from picasso.nn_picasso import PICASSOnn
 
         mm = self.mixing_matrix
-        model = PICASSOnn(mm)
-        model.train_loop(self.images)
+        model = PICASSOnn(mm[0,:,:])
+        model.train_loop(self.images, **kwargs)
         self.mixing_matrix = model.mixing_parameters                            #get mixing parameters
         self.unmix_images()                                                     #unmix images and add new layer
 
@@ -62,32 +64,38 @@ class PicassoWidget(Container):
 
         mm = self.mixing_matrix
         images = self.images
+        image_names = self.image_names
 
-        if self.BG:
-            assert mm.ndim == 3
-            alpha = mm[0,:,:]
-            bg = mm[1,:,:]
-        else:
-            assert mm.ndim == 2
-            alpha = mm
+        # if self.BG:
+        #     assert mm.ndim == 3
+        #     alpha = mm[0,:,:]
+        #     bg = mm[1,:,:]
+        # else:
+        #     assert mm.ndim == 2
+        #     alpha = mm
+        alpha = mm[0,:,:]
+        bg = mm[1,:,:]
 
-        nsinks, nimages = alpha.shape
-        assert len(images) == nimages, f'Expected {nimages}, got {len(images)}'
+        nimages, nsinks = alpha.shape
+        assert len(images) == nimages, f'Expected {nimages} images, got {len(images)} images'
 
         fimages_ = []
         for im in images:
-            fimages_.append(im.data.flatten())
+            fimages_.append(im.flatten())
         fimages = da.stack(fimages_, axis=1)
+        row, col = im.shape
 
         for i in range(nsinks):
             sink_ind = np.where(mm[:,i] == 1)[0][0]
-            layer_info = images[sink_ind].as_layer_data_tuple()[1]
-            layer_info['name'] = 'unmixed_' + layer_info['name']
+            sink_name = image_names[sink_ind]
+            layer_info = get_layer_info(self._viewer, sink_name)
+            layer_info['name'] = 'unmixed_' + sink_name
             if self.BG:
                 unmixed = (fimages - bg[:,i].T) @ alpha[:,i]
             else:
                 unmixed = fimages @ alpha[:,i]
-            self.viewer.add_image(unmixed, **layer_info)
+            self._viewer.add_image(unmixed.reshape((row, col)), **layer_info)
+
 
     @property
     def sinks(self: Container) -> [int]:
@@ -104,12 +112,28 @@ class PicassoWidget(Container):
     def mixing_dict(self):
         '''Dictionary of mixing parameters. source : sink : alpha'''
 
-        sources = {}
+        mp = {}
         for s in self.sinks:
             sink = self[f'sink{s}']
-            mp[sink.sink_list.value] = sink.mixing_params
+            mp[sink.sink_list.current_choice] = sink.mixing_params
 
         self._mixing_dict = mp
+
+        return mp
+
+    @mixing_dict.setter
+    def mixing_dict(self, mix_dict):
+        '''Dictionary of mixing parameters. source : sink : alpha'''
+
+        mp = {}
+        for s in self.sinks:
+            sink = self[f'sink{s}']
+            sink_name = sink[f'sinklist{s}'].current_choice
+            sink.current_src_opts.set_mixing_parameters(mix_dict[sink_name])
+
+        self._mixing_dict = mp
+
+        return mp
 
 
     @property
@@ -122,21 +146,21 @@ class PicassoWidget(Container):
 
         '''
 
-        mixdict = self.mixing_dict                                              # dictionary = {sink image :{source image: mixing param}}
-        images = self.images                                                    # list of images selected as sink or source
+        mix_dict = self.mixing_dict                                              # dictionary = {sink image :{source image: mixing param}}
+        images = self.image_names                                               # list of image names selected as sink or source
 
-        mm = np.zeros((2, len(images), len(mixdict)))
-        for i, sink in enumerate(mixdict.keys()):
+        mm = np.zeros((2, len(images), len(mix_dict)))
+        for i, sink in enumerate(mix_dict.keys()):
             for ii, source in enumerate(images):
                 mix_params  = mix_dict[sink].get(source, {'alpha':0})
-                if mix_params['alpha'] > 0 and sink is not source:
-                    mm[0,ii,i] = -mix_param['alpha']
-                    mm[1,ii,i] = mix_param.get('background', 0)
-                elif mix_params == 0 and sink is source:
-                    mm[ii,i] = 1
+                if mix_params['alpha'] > 0 and sink != source:
+                    mm[0,ii,i] = -mix_params['alpha']
+                    mm[1,ii,i] = mix_params.get('background', 0)
+                elif mix_params['alpha'] == 0 and sink == source:
+                    mm[0,ii,i] = 1
 
-        if mm[1,:,:].sum() == 0:                                                # Remove background if not used
-            mm = mm[0,:,:]
+        # if mm[1,:,:].sum() == 0:                                                # Remove background if not used
+        #     mm = mm[0,:,:]
 
         self._mixing_matrix = mm
 
@@ -146,8 +170,8 @@ class PicassoWidget(Container):
     @mixing_matrix.setter
     def mixing_matrix(self, mm):
 
-        mixdict = self.mixing_dict
-        images = self.images
+        mix_dict = self.mixing_dict
+        images = self.image_names                                               # list of image names
 
         if self.BG:
             assert mm.ndim == 3
@@ -155,35 +179,58 @@ class PicassoWidget(Container):
             assert mm.ndim == 2
             mm = np.expand_dims(mm,axis=0)
 
-        nsources, nsinks = mm.shape
-        if len(mix_dict) != nsinks or len(sources) != nsources:
+        dum, nimages, nsinks = mm.shape
+        if len(mix_dict) != nsinks or len(images) != nimages:
             raise ValueError(f'Mismatch between number of selected sink and source images and mixing matrix, try rerunning PICASSO')
 
-        for i, sink in enumerate(mixdict.keys()):
+        for i, sink in enumerate(mix_dict.keys()):
+            assert len(mix_dict[sink]) == (mm[0,:,i] < 0).sum(), f'Mismatch between number of sources for sink {sink}'
             for ii, source in enumerate(images):
-                if mix_param < 0 and sink is not source:
+                if mm[0,ii,i] < 0 and sink != source:
                     mix_dict[sink][source]['alpha'] = -mm[0,ii,i]
                     if self.BG:
                         mix_dict[sink][source]['background'] = mm[1,ii,i]
 
+        self.mixing_dict = mix_dict
         self._mixing_matrix = mm
 
 
     @property
-    def images(self):
-        'List of source image names'
+    def image_names(self):
+        'List of sink/source image names'
 
-        mixdict = self.mixing_dict
+        mix_dict = self.mixing_dict
         images = dict()
 
-        for sink in mixdict.keys():
+        # Unique images that are marked as sinks
+        for sink in mix_dict.keys():
             images.update({sink:None})
-
+        # Add unique images that are marked as sources
         for sinksource in mix_dict.values():
             for source in sinksource.keys():
                 images.update({source:None})
+        images = list(images)
 
-        self._images = list(images)
+        # Reorder to match viewer layer List
+        images_ = []
+        for l in self._viewer.layers:
+            if l.name in images:
+                images_.append(l.name)
+        self._image_names = images_
+
+        return self._image_names
+
+    @property
+    def images(self):
+        'List of sink/source images'
+
+        image_names = self.image_names
+        self._images = []
+        layers =  self._viewer.layers
+
+        for l in layers:
+            if l.name in image_names:
+                self._images.append(l.data)
 
         return self._images
 
@@ -216,7 +263,7 @@ class SinkWidget(Container):
                          label = ' '
                         )
 
-        self.mixing_params = {}                                                 # {source image: alpha}
+        self.mixing_params = {}                                                 # {source image: {'alpha':a,'background':b}
         self.index = index                                                      # index of sink: int
         self.current_src_opts = None                                            # source options widget
         self.n_sources = 0                                                      # Number of sources that spillover
@@ -224,11 +271,11 @@ class SinkWidget(Container):
         self.BG = BG                                                            # Flag to show background parameter
 
 
-    def show_sources(self) -> None:
+    def show_sources(self, **kwargs) -> None:
         '''Show widget to select source images.'''
 
         if self.current_src_opts is None:
-            self.current_src_opts = SourceOptions(self.source_images(), self.mixing_params, BG = self.BG)
+            self.current_src_opts = SourceOptions(self.source_images(), self.mixing_params, BG = self.BG, **kwargs)
             self.current_src_opts.changed.connect(self.update_mixing_params)
 
         self.current_src_opts.show()
@@ -250,8 +297,11 @@ class SinkWidget(Container):
         '''Source image options (sink image removed).'''
 
         src_imgs = self._images.copy()
-        sink_img = self.sink_list.value
-        if sink_img in src_imgs:
+        src_names = [s.name for s in src_imgs]
+
+        sink_img = self.sink_list.current_choice
+
+        if sink_img in src_names:
             src_imgs.remove(sink_img)
 
         return src_imgs
@@ -286,7 +336,7 @@ class _SourceList(Container):
 class SourceWidget(Container):
     '''Select single source image and alpha mixing parameter pair.'''
 
-    def __init__(self, images: [ImageData], index: int = 0, alpha: float = 0.0,
+    def __init__(self, images: [ImageData], index: int = 0, alpha: float = 0.01,
                        background: float = 0.0, BG: bool = False, **kwargs):
 
         self.index = index                                                      # Source index, int
@@ -326,16 +376,29 @@ class SourceWidget(Container):
 
 
     @property
-    def mixing_param(self) -> (ImageData, float):
+    def mixing_param(self):
         '''Tuple of source image and alpha mixing parameter.'''
 
-        img = self.source_list.source_list.value
+        img = self.source_list.source_list.current_choice
         alpha = self.alpha.value
         background = self.background.value
 
         self._mixing_param = (img, alpha, background)
 
         return img, alpha, background
+
+    @mixing_param.setter
+    def mixing_param(self, mix_dict: dict):
+        '''Set parameter widgets with values from mixing dictionary'''
+
+        img = self.source_list.source_list.current_choice
+        alpha = mix_dict[img]['alpha']
+        background = mix_dict[img]['background']
+
+        self.alpha.bind(alpha)
+        self.background.bind(background)
+
+        self._mixing_param = (img, alpha, background)
 
     def update_bg_slider(self):
         '''Update max, min, and step values of background slider.'''
@@ -358,7 +421,7 @@ class SourceWidget(Container):
 class SourceOptions(Container):
     '''Define multiple source image and alpha pairs that spill over into the sink image.'''
 
-    def __init__(self, images: [ImageData], index: int = 0,  mixing_params: dict = {}, BG: bool = False):
+    def __init__(self, images: [ImageData], index: int = 0,  mixing_params: dict = {}, BG: bool = False, **kwargs):
 
         self._images = images                                                   # List of possible source images
         self.BG = BG
@@ -370,7 +433,7 @@ class SourceOptions(Container):
 
         super().__init__(widgets = [add_source_btn],
                          name=f'sink{index}_sources',
-                         labels = False
+                         labels = False, **kwargs
                         )
 
         self.add_source()
@@ -381,7 +444,7 @@ class SourceOptions(Container):
         #         self.add_source(alpha, background, value = sink_im)
 
 
-    def add_source(self, alpha: float = 0.0, background: float = 0.0, **kwargs) -> None:
+    def add_source(self, alpha: float = 0.01, background: float = 0.0, **kwargs) -> None:
         '''Add new source widget.'''
 
         i = 0
@@ -412,7 +475,7 @@ class SourceOptions(Container):
 
 
     def __call__(self) -> {ImageData:float}:
-        '''Return dictionary of mixing paremeters {sink image : alpha}.'''
+        '''Return dictionary of mixing parameters {sink image : {'alpha':a, 'background':b}}.'''
 
         mp = {}
         for s in self.sources:
@@ -421,3 +484,7 @@ class SourceOptions(Container):
             mp[img] = {'alpha':alpha, 'background':background}
 
         return mp
+
+    def set_mixing_parameters(self, mix_dict: dict):
+        for s in self.sources:
+            source = self[f'source{s}'].mixing_param = mix_dict

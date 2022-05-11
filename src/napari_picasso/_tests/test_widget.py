@@ -1,11 +1,31 @@
-#from napari_picasso.widgets import PicassoWidget
+from napari_picasso.widgets import PicassoWidget
 import numpy as np
 import napari
 import pytest
 
 @pytest.fixture
-def viewer():
-    return napari.Viewer(show = False)
+def loaded_viewer(sink_source):
+    viewer = napari.Viewer(show = False)
+    viewer.add_image(sink_source[0], name='sink')
+    viewer.add_image(sink_source[1], name='source')
+
+    return viewer
+
+@pytest.fixture
+def loaded_widget(loaded_viewer, sink_source):
+
+    widget = PicassoWidget(loaded_viewer, visible=False)
+    widget.add_sink_widget()
+
+    sink = widget['sink0']
+    sink.sink_list.bind(sink_source[0])
+    sink.show_sources(visible=False)
+    sink.update_mixing_params()
+
+    for s in widget.sinks:
+        sink = widget[f'sink{s}']
+
+    return widget
 
 @pytest.fixture
 def sink_source():
@@ -23,12 +43,12 @@ def sink_source():
 
     return sink, source
 
-def test_widget_import(viewer, sink_source):
+def test_widget_import(loaded_viewer, sink_source):
     from napari_picasso.widgets import PicassoWidget
     # viewer.add_image(sink_source[0], name='sink')
     # viewer.add_image(sink_source[0], name='source')
 
-    widget = PicassoWidget(viewer)
+    widget = PicassoWidget(loaded_viewer)
 
     assert widget.BG
 
@@ -40,35 +60,87 @@ def test_mine_import():
     assert model.device in ['cuda', 'cpu']
 
 def test_picassoNN_import():
-    mm = np.zeros([1 -1]).T
+    mm = np.array([1, -1])
     from picasso.nn_picasso import PICASSOnn
     model = PICASSOnn(mm)
     print(f'Using {model.device}')
 
     assert model.device in ['cuda', 'cpu']
 
+def test_get_napari_image_names(loaded_widget):
+    im_names = loaded_widget.image_names
+
+    assert len(im_names) == 2
+    for i in im_names:
+        assert i in ['sink', 'source']
+
+
+def test_mixing_dict_to_matrix(loaded_widget):
+    mm = loaded_widget.mixing_matrix
+
+    assert mm.ndim == 3
+    assert mm[0,0,0] == 1
+    assert mm[0,1,0] == -0.01
+    assert int(mm[1,1,0]) == 100
+
+def test_set_mixdict(loaded_widget):
+    alpha = (2000*0.5)/(2000-100)
+    mm = np.array([[[1], [-alpha]],[[0],[100]]])
+    loaded_widget.mixing_matrix = mm
+
+    assert loaded_widget.mixing_dict['sink']['source']['alpha'] == alpha
+    assert  loaded_widget.mixing_dict['sink']['source']['background'] == 100
+
+def test_unmix_images(loaded_widget):
+
+    alpha = (2000*0.5)/(2000-100)
+    mm = np.array([[[1], [-alpha]],[[0],[100]]])
+    loaded_widget.mixing_matrix = mm
+
+    loaded_widget.unmix_images()
+
+    layer_names = [l.name for l in loaded_widget._viewer.layers]
+
+    assert 'unmixed_sink' in layer_names
+
+#
+#
+# def test_mixing_dict_to_matrix(loaded_widget):
+#     mm = loaded_widget.mixing_dict
+#
+#     assert mm[0]
+
+
 
 # make_napari_viewer is a pytest fixture that returns a napari viewer object
 # capsys is a pytest fixture that captures stdout and stderr output streams
 #def test_picasso_widget(make_napari_viewer, capsys):
-def test_picasso_widget(capsys):
+def test_picasso_widget(loaded_widget):
+    loaded_widget.run_picasso(max_iter = 10)
+
+    #loaded_widget.run_picasso()
     # # make viewer and add an image layer using our fixture
     #viewer = make_napari_viewer()
 
     #viewer = napari.Viewer()
-    #viewer.add_image(astronaut(), channel_axis=2)
+    # viewer.add_image(sink_source[0], name='sink')
+    # viewer.add_image(sink_source[1], name='source')
+    #
+    # # create our widget, passing in the viewer
+    # my_widget = PicassoWidget(loaded_viewer)
+    # # for im in in
+    # my_widget.mixing_dict = {}
 
-    # create our widget, passing in the viewer
-    #my_widget = PicassoWidget(viewer)
+    #
 
     # call our widget method
     # my_widget._on_click()
 
     # read captured output and check that it's as we expected
-    print('Test capsys')
-    captured = capsys.readouterr()
-    print(captured.out)
-    assert captured.out == "Test capsys\n"
+    # print('Test capsys')
+    # captured = capsys.readouterr()
+    # print(captured.out)
+    # assert captured.out == "Test capsys\n"
 
 # def test_example_magic_widget(make_napari_viewer, capsys):
 #     viewer = make_napari_viewer()

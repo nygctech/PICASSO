@@ -40,7 +40,7 @@ class PICASSOnn(nn.Module):
         else:
             self.device = 'cpu'
         print('Using', self.device)
-        self.mixing_matrix = torch.tensor(mixing_matrix, device = self.device)
+        self.mixing_matrix = mixing_matrix
         self.pairs = self.mixing_matrix                                         # Pairs property take mixing matrix as input to set
 
         self.bit_depth = px_bit_depth
@@ -87,7 +87,7 @@ class PICASSOnn(nn.Module):
         no_spill = self.transform.forward(images)
 
         # Keep contrast of sink image the same
-        self.c_loss = self.contrast_loss(images[:,self.sink_ind], no_spill)*self.contrast_weight
+        self.c_loss = self.contrast_loss(images[:,self.sink_mask], no_spill)*self.contrast_weight
         c_loss = torch.sum(self.c_loss)
 
         # Minimize mutual information between cleaned sink image and source images
@@ -117,7 +117,7 @@ class PICASSOnn(nn.Module):
 
 
 
-    def train_loop(self, images, max_iter=40, batch_size=500, lr=1e-3, opt=None, **kwargs):
+    def train_loop(self, images, max_iter=100, batch_size=500, lr=1e-3, opt=None, **kwargs):
 
         mix_params = [self.transform.alpha]
         bg_params = [self.transform.background]
@@ -170,7 +170,7 @@ class PICASSOnn(nn.Module):
 
             loss_ = np.array([batch_loss, batch_mi_loss, batch_contrast_loss])
             loss_ /= batch
-            if i % (max_iter // 10) == 0:
+            if i % 10 == 0:
                 print(f"It {i} - total loss: {loss_[0]}, total MI loss: {loss_[1]}, total contrast loss: {loss_[2]}")
 
             if loss_[1] == 0:
@@ -324,7 +324,7 @@ class PICASSOnn(nn.Module):
         if mm.ndim == 1:
             mm = np.expand_dims(mm, -1)
         n_src, n_snk = mm.shape
-        assert n_snk >= n_src, f'Number of sinks {n_snk} must be >= number of sources {n_src}'
+        assert n_src >= n_snk, f'Number of sources {n_src} must be >= number of sinks {n_snk}'
         # if n_src == n_snk:
         #     assert (mm.diagonal() == 1).all(), f'Diagonal of mixing matrix should be 1s'
         #     off_diag = mm[~torch.eye(mm.shape[0],dtype=bool)]
@@ -333,7 +333,9 @@ class PICASSOnn(nn.Module):
         #     assert ((mm==0) | (mm==-1) | (mm==1)).all(), f'Mixing matrix should only include -1s, 0s, or 1s'
 
         mm[mm < 0] = -1                                                         #Mark source images as -1
-        assert (mm==1).sum(axis=1).all() <= 1, f'Only 1 image can be marked as a sink per column in the mixing matrix'
+        assert ((mm==1).sum(axis=0) == 1).all(), f'1 image must be marked as a sink per column in the mixing matrix'
+        assert ((mm==1).sum(axis=1) <= 1).all(), f'Image marked as sink in multiple columns in the mixing matrix'
+        assert ((mm==-1).sum(axis=0) >= 1).all(), f'At least 1 image must be marked as a source per column in the mixing matrix'
 
         # Remove unused sources
         #mm = mm[~((mm==0).sum(axis=1) == 0)]
@@ -341,10 +343,15 @@ class PICASSOnn(nn.Module):
         #mm = mm[~((mm==1).sum(axis=0) == 1)]
 
         #self.source_ind = ~(mm.sum(axis=1) == 1)
-        self.sink_ind = ((mm==-1).sum(axis=0) >= 1) and ((mm==1).sum(axis=0) == 1)
+        self.sink_mask = (mm==1).sum(axis=1) == 1
+        #self.sink_mask = (mm == 1).sum(axis=0).T == 1
+        #print(self.sink_mask)
 
         # Get images x sink mixing matrix (columns have 1 sink and at least one source image)
-        self._mixing_matrix = mm[:, self.sink_ind]
+        #self._mixing_matrix = mm[:, self.sink_ind]
+        #self._mixing_matrix = mm[:, self.sink_ind]
+        
+        self._mixing_matrix = torch.tensor(mm, device = self.device, dtype=torch.float32)
         self.n_images, self.n_sinks = self._mixing_matrix.shape
 
 
@@ -352,11 +359,12 @@ class PICASSOnn(nn.Module):
     def mixing_parameters(self):
 
         alpha = (self.mixing_matrix * self.transform.alpha).detach().cpu()
-        if transform.bg:
-            bg = self.transform.background * self.max_px
-            self._mixing_parameters = np.stack([alpha, background.detach().cpu()])
+        if self.transform.bg:
+            bg = (self.transform.background * self.max_px).detach().cpu()
         else:
-            self._mixing_parameters = alpha
+            bg = np.zeros(alpha.shape)
+
+        self._mixing_parameters = np.stack([alpha, bg], axis = 0)
 
         return self._mixing_parameters
 
