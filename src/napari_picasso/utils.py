@@ -6,3 +6,12 @@ def get_layer_info(viewer, layer_name):
         return viewer.layers[ind].as_layer_data_tuple()[1]
     else:
         raise ValueError(f'{layer_name} not in viewer')
+
+
+def get_image_layers(viewer):
+    images = []
+    for l in viewer.layers:
+        if l.as_layer_data_tuple()[2] == 'image':                               #TODO: Find better way to filter image layers
+            images.append(l)
+
+    return images

@@ -1,4 +1,5 @@
-from napari_picasso.widgets import PicassoWidget
+from napari_picasso.main_widget import PicassoWidget
+from napari_picasso.utils import get_image_layers
 import numpy as np
 import napari
 import pytest
@@ -19,7 +20,7 @@ def loaded_widget(loaded_viewer, sink_source):
 
     sink = widget['sink0']
     sink.sink_list.bind(sink_source[0])
-    sink.show_sources(visible=False)
+    sink.show_sources()
     sink.update_mixing_params()
 
     for s in widget.sinks:
@@ -43,14 +44,6 @@ def sink_source():
 
     return sink, source
 
-def test_widget_import(loaded_viewer, sink_source):
-    from napari_picasso.widgets import PicassoWidget
-    # viewer.add_image(sink_source[0], name='sink')
-    # viewer.add_image(sink_source[0], name='source')
-
-    widget = PicassoWidget(loaded_viewer)
-
-    assert widget.BG
 
 def test_mine_import():
     from mine.mine import MINE
@@ -117,6 +110,10 @@ def test_unmix_images(loaded_widget):
 #def test_picasso_widget(make_napari_viewer, capsys):
 def test_picasso_widget(loaded_widget):
     loaded_widget.run_picasso(max_iter = 10)
+    image_layers = get_image_layers(loaded_widget._viewer)
+    image_names = [l.name for l in image_layers]
+
+    assert 'unmixed_sink' in image_names
 
     #loaded_widget.run_picasso()
     # # make viewer and add an image layer using our fixture
