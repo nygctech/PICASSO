@@ -117,7 +117,7 @@ class PICASSOnn(nn.Module):
 
 
 
-    def train_loop(self, images, max_iter=100, batch_size=500, lr=1e-3, opt=None, **kwargs):
+    def train_loop(self, images, max_iter=100, batch_size=-1, lr=1e-3, opt=None, **kwargs):
 
         mix_params = [self.transform.alpha]
         bg_params = [self.transform.background]
@@ -169,7 +169,7 @@ class PICASSOnn(nn.Module):
 
 
             loss_ = np.array([batch_loss, batch_mi_loss, batch_contrast_loss])
-            loss_ /= batch
+            loss_ /= (batch+1)
             if i % 10 == 0:
                 print(f"It {i} - total loss: {loss_[0]}, total MI loss: {loss_[1]}, total contrast loss: {loss_[2]}")
 
@@ -350,7 +350,7 @@ class PICASSOnn(nn.Module):
         # Get images x sink mixing matrix (columns have 1 sink and at least one source image)
         #self._mixing_matrix = mm[:, self.sink_ind]
         #self._mixing_matrix = mm[:, self.sink_ind]
-        
+
         self._mixing_matrix = torch.tensor(mm, device = self.device, dtype=torch.float32)
         self.n_images, self.n_sinks = self._mixing_matrix.shape
 
