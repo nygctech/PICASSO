@@ -1,36 +1,22 @@
-from napari_plugin_engine import napari_hook_implementation
-from magicgui import magic_factory
-from typing import List, Dict, Any
+from napari_picasso.main_widget import PicassoWidget
+from napari.qt.threading import thread_worker
 
-# @napari_hook_implementation(specname="napari_get_writer")
-# def picasso_plugin(path: str, layer_data: List[Tuple[Any, Dict, str]])-> List[str]:
-#
-#     for layer in layer_data:
-#         print(layer)[2]
-#         if layer[2] == 'image':
-#             layer_name = layer[2]['name']
-#             data = layer[0]
-#             layer[0] = data * 0.5
-#
-#     return path
+def return_widget(viewer: 'napari.viewer.Viewer', **kwargs):
+    widget = PicassoWidget(viewer, **kwargs)
 
+    def make_model(**kwargs):
+        from picasso.nn_picasso import PICASSOnn
+        mm = widget.mixing_matrix
+        model = PICASSOnn(mm[0,:,:])
+        worker = train_model(model, widget.images, **kwargs)
 
+    widget._make_model = make_model
 
-@magic_factory(
-    auto_call=True,
-    run_button={"widget_type": "PushButton", 'label':'run'},
-    new_pair_button={"widget_type": "PushButton", 'label':'new pair'},
-    alpha={"widget_type": "FloatSlider", 'max': 2, 'min':0},
-)
-def picasso_plugin(
-    source_image: 'napari.types.ImageData',
-    sink_image: 'napari.types.ImageData',
-    run_button,
-    new_pair_button,
-    slider_float=1.0):
+    @thread_worker(connect={"returned": widget.unmix_images})
+    def train_model(model, images, **kwargs):
+        model.train_loop(images, **kwargs)
+        return model.mixing_parameters
 
-    pass
+    widget.run_btn.changed.connect(make_model)
 
-@napari_hook_implementation
-def napari_experimental_provide_dock_widget():
-    return picasso_plugin
+    return widget

@@ -3,7 +3,7 @@ contributions:
   commands:
     - id: napari-PICASSO.PicassoWidget
       title: PICASSO
-      python_name: napari_picasso.main_widget:PicassoWidget
+      python_name: napari_picasso.napari_picasso:return_widget
   widgets:
     - command: napari-PICASSO.PicassoWidget    # note, same as command.id above
       display_name: PICASSO

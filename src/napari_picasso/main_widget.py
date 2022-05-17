@@ -6,6 +6,8 @@ from napari_picasso.utils import get_layer_info, get_image_layers
 from napari_picasso.sink_widget import SinkWidget
 
 
+
+
 class PicassoWidget(Container):
     '''Main picasso widget.'''
 
@@ -17,11 +19,11 @@ class PicassoWidget(Container):
         add_sink_btn = PushButton(text="+sink", name="add_snk")
         open_options_btn = PushButton(text="options", name="options")
         run_btn = PushButton(text="run", name="run")
+        self.run_btn = run_btn
 
         # Connect header buttons to header functions
         add_sink_btn.changed.connect(self.add_sink_widget)
         open_options_btn.changed.connect(self.open_options)
-        run_btn.changed.connect(self.run_picasso)
 
         # Size header buttons
         widgets = [add_sink_btn, open_options_btn, run_btn]
@@ -34,7 +36,6 @@ class PicassoWidget(Container):
         self.mixing_params = {}                                                 # Current mixing paramers {sink : {source:alpha}}
         self._viewer = viewer                                                   # napari viewer
 
-        #self.changed.connect(self.get_mixing_params)
 
         self.picasso_params = None
         self.BG = True
@@ -58,29 +59,18 @@ class PicassoWidget(Container):
 
     def open_options(self: Container):
         print('Open options not implemented yet')
+                                                #unmix images and add new layer
 
-    def run_picasso(self: Container,  *args, **kwargs):
-        from picasso.nn_picasso import PICASSOnn
+    def unmix_images(self, mixing_matrix = None):
 
-        mm = self.mixing_matrix
-        model = PICASSOnn(mm[0,:,:])
-        model.train_loop(self.images, **kwargs)
-        self.mixing_matrix = model.mixing_parameters                            #get mixing parameters
-        self.unmix_images()                                                     #unmix images and add new layer
-
-    def unmix_images(self):
+        changed = False
+        if mixing_matrix is not None:
+            self.mixing_matrix = mixing_matrix
+            changed = True
 
         mm = self.mixing_matrix
         images = self.images
         image_names = self.image_names
-
-        # if self.BG:
-        #     assert mm.ndim == 3
-        #     alpha = mm[0,:,:]
-        #     bg = mm[1,:,:]
-        # else:
-        #     assert mm.ndim == 2
-        #     alpha = mm
         alpha = mm[0,:,:]
         bg = mm[1,:,:]
 
@@ -104,6 +94,8 @@ class PicassoWidget(Container):
                 unmixed = fimages @ alpha[:,i]
             self._viewer.add_image(unmixed.reshape((row, col)), **layer_info)
 
+        if changed:
+            self.picasso_params = mixing_matrix
 
     @property
     def sinks(self: Container) -> [int]:
@@ -166,9 +158,6 @@ class PicassoWidget(Container):
                     mm[1,ii,i] = mix_params.get('background', 0)
                 elif mix_params['alpha'] == 0 and sink == source:
                     mm[0,ii,i] = 1
-
-        # if mm[1,:,:].sum() == 0:                                                # Remove background if not used
-        #     mm = mm[0,:,:]
 
         self._mixing_matrix = mm
 

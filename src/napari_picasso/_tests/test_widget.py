@@ -1,8 +1,9 @@
-from napari_picasso.main_widget import PicassoWidget
+from napari_picasso.napari_picasso import return_widget
 from napari_picasso.utils import get_image_layers
 import numpy as np
 import napari
 import pytest
+import time
 
 @pytest.fixture
 def loaded_viewer(sink_source):
@@ -15,7 +16,7 @@ def loaded_viewer(sink_source):
 @pytest.fixture
 def loaded_widget(loaded_viewer, sink_source):
 
-    widget = PicassoWidget(loaded_viewer, visible=False)
+    widget = return_widget(loaded_viewer, visible=False)
     widget.add_sink_widget()
 
     sink = widget['sink0']
@@ -109,7 +110,11 @@ def test_unmix_images(loaded_widget):
 # capsys is a pytest fixture that captures stdout and stderr output streams
 #def test_picasso_widget(make_napari_viewer, capsys):
 def test_picasso_widget(loaded_widget):
-    loaded_widget.run_picasso(max_iter = 10)
+    loaded_widget._make_model(max_iter = 10)
+    start = time.time()
+    while time.time() <= start+120:
+        if loaded_widget.picasso_params is not None:
+            break
     image_layers = get_image_layers(loaded_widget._viewer)
     image_names = [l.name for l in image_layers]
 
