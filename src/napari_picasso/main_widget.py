@@ -35,11 +35,22 @@ class PicassoWidget(Container):
 
         self.mixing_params = {}                                                 # Current mixing paramers {sink : {source:alpha}}
         self._viewer = viewer                                                   # napari viewer
-
+        self._progress = None
 
         self.picasso_params = None
         self.BG = True
 
+    def update_progress(self, iter):
+
+        if self._progress is None:
+            # print some warning message
+            pass
+        elif iter < self._progress.total-1:
+            self._progress.update(1)
+        elif iter >= self._progress.total - 1:
+            self._progress.display(['Unmixing images', iter])
+            self._progress.close()
+            self._progress = None
 
     def add_sink_widget(self: Container) -> None:
 

@@ -66,6 +66,8 @@ class PICASSOnn(nn.Module):
         self.mi_weight = mi_weight
         self.contrast_weight = 1-mi_weight
 
+        self.train_info = None
+
 
 
     def contrast_loss(self, x, y, k2 = 0.03):
@@ -114,8 +116,6 @@ class PICASSOnn(nn.Module):
         total_loss = mi_loss + c_loss
 
         return total_loss, self.mi_loss, self.c_loss
-
-
 
     def train_loop(self, images, max_iter=100, batch_size=-1, lr=1e-3, opt=None, **kwargs):
 
@@ -174,14 +174,17 @@ class PICASSOnn(nn.Module):
                 print(f"It {i} - total loss: {loss_[0]}, total MI loss: {loss_[1]}, total contrast loss: {loss_[2]}")
 
             if loss_[1] == 0:
+                yield max_iter
                 break
+
+            yield i-1
 
         train_info = {'mutual information loss': mi_loss_,
                       'contrast loss': contrast_loss_}
         if kwargs.get('SAVE_MIX_PARAMETERS', False):
             train_info['mixing parameters'] = mix_params_
 
-        return train_info
+        self.train_info = train_info
 
     def get_dataset(self, images, batch_size=-1, ch_dim=0):
         'Format images so that are flattened and stacked in columns by channel'
