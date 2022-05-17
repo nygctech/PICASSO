@@ -97,6 +97,9 @@ def test_unmix_images(loaded_widget):
 
     assert 'unmixed_sink' in layer_names
 
+def test_progress_bar(loaded_widget):
+
+
 #
 #
 # def test_mixing_dict_to_matrix(loaded_widget):
@@ -111,6 +114,7 @@ def test_unmix_images(loaded_widget):
 #def test_picasso_widget(make_napari_viewer, capsys):
 def test_picasso_widget(loaded_widget):
     loaded_widget._make_model(max_iter = 10)
+    assert loaded_widget.progress.total == 10
     start = time.time()
     while time.time() <= start+120:
         if loaded_widget.picasso_params is not None:

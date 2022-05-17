@@ -12,7 +12,7 @@ def return_widget(viewer: 'napari.viewer.Viewer', **kwargs):
         widget._progress = progress(range(kwargs.get('max_iter', 100)))
         widget._progress.set_description("Optimizing mixing parameters")
         worker = train_model(model, widget.images, **kwargs)
-    widget._make_model = make_model
+    widget._make_model = make_model                                             #handle for testing
 
     @thread_worker(connect={'returned': widget.unmix_images,
                             'yielded':widget.update_progress})
