@@ -1,4 +1,5 @@
-from napari_picasso.napari_picasso import return_widget
+#from napari_picasso.napari_picasso import return_widget
+from napari_picasso.main_widget import PicassoWidget
 from napari_picasso.utils import get_image_layers
 import numpy as np
 import napari
@@ -16,7 +17,8 @@ def loaded_viewer(sink_source):
 @pytest.fixture
 def loaded_widget(loaded_viewer, sink_source):
 
-    widget = return_widget(loaded_viewer, visible=False)
+    #widget = return_widget(loaded_viewer, visible=False)
+    widget = PicassoWidget(loaded_viewer)
     widget.add_sink_widget()
 
     sink = widget['sink0']
@@ -97,24 +99,10 @@ def test_unmix_images(loaded_widget):
 
     assert 'unmixed_sink' in layer_names
 
-def test_progress_bar(loaded_widget):
 
-
-#
-#
-# def test_mixing_dict_to_matrix(loaded_widget):
-#     mm = loaded_widget.mixing_dict
-#
-#     assert mm[0]
-
-
-
-# make_napari_viewer is a pytest fixture that returns a napari viewer object
-# capsys is a pytest fixture that captures stdout and stderr output streams
-#def test_picasso_widget(make_napari_viewer, capsys):
 def test_picasso_widget(loaded_widget):
-    loaded_widget._make_model(max_iter = 10)
-    assert loaded_widget.progress.total == 10
+    loaded_widget.make_model(max_iter = 10)
+    assert loaded_widget._progress.total == 10
     start = time.time()
     while time.time() <= start+120:
         if loaded_widget.picasso_params is not None:
@@ -123,41 +111,3 @@ def test_picasso_widget(loaded_widget):
     image_names = [l.name for l in image_layers]
 
     assert 'unmixed_sink' in image_names
-
-    #loaded_widget.run_picasso()
-    # # make viewer and add an image layer using our fixture
-    #viewer = make_napari_viewer()
-
-    #viewer = napari.Viewer()
-    # viewer.add_image(sink_source[0], name='sink')
-    # viewer.add_image(sink_source[1], name='source')
-    #
-    # # create our widget, passing in the viewer
-    # my_widget = PicassoWidget(loaded_viewer)
-    # # for im in in
-    # my_widget.mixing_dict = {}
-
-    #
-
-    # call our widget method
-    # my_widget._on_click()
-
-    # read captured output and check that it's as we expected
-    # print('Test capsys')
-    # captured = capsys.readouterr()
-    # print(captured.out)
-    # assert captured.out == "Test capsys\n"
-
-# def test_example_magic_widget(make_napari_viewer, capsys):
-#     viewer = make_napari_viewer()
-#     layer = viewer.add_image(np.random.random((100, 100)))
-#
-#     # this time, our widget will be a MagicFactory or FunctionGui instance
-#     my_widget = example_magic_widget()
-#
-#     # if we "call" this object, it'll execute our function
-#     my_widget(viewer.layers[0])
-#
-#     # read captured output and check that it's as we expected
-#     captured = capsys.readouterr()
-#     assert captured.out == f"you have selected {layer}\n"

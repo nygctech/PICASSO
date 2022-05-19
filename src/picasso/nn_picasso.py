@@ -201,13 +201,13 @@ class PICASSOnn(nn.Module):
             dtype = images[0].dtype
 
             for i in images:
-                im_type_ = type(i)
+                im_type = type(i)
 
                 if im_type in [IL_TYPE, XR_TYPE]:
                     i = i.data
-                    im_type_ = type(i)
+                    im_type = type(i)
 
-                if im_type_ is not DA_TYPE:
+                if im_type is not DA_TYPE:
                     im_stack.append(da.from_array(i).flatten())
                 else:
                     im_stack.append(i.flatten())
@@ -217,10 +217,10 @@ class PICASSOnn(nn.Module):
             dim_shape = images.shape
             if ch_dim == 0:
             # assume if channel first, row and cols are the last 2 axis
-                n_im = dim_shape[0], rows = dim_shape[-2], cols = dim_shape[-1]
-            elif ch_im == -1:
+                n_im = dim_shape[0]; rows = dim_shape[-2]; cols = dim_shape[-1]
+            elif ch_dim == -1:
             # assume if channel last, row and cols are the first 2 axis
-                n_im = dim_shape[-1], rows = dim_shape[0], cols = dim_shape[1]
+                n_im = dim_shape[-1]; rows = dim_shape[0]; cols = dim_shape[1]
             else:
                 raise ValueError(f'expected ch_dim to be 0 or -1, got {ch_dim}')
 

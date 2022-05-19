@@ -4,6 +4,8 @@ import numpy as np
 import dask.array as da
 from napari_picasso.utils import get_layer_info, get_image_layers
 from napari_picasso.sink_widget import SinkWidget
+from napari.qt.threading import create_worker
+from napari.utils import progress
 
 
 
@@ -19,11 +21,12 @@ class PicassoWidget(Container):
         add_sink_btn = PushButton(text="+sink", name="add_snk")
         open_options_btn = PushButton(text="options", name="options")
         run_btn = PushButton(text="run", name="run")
-        self.run_btn = run_btn
+        #self.run_btn = run_btn
 
         # Connect header buttons to header functions
         add_sink_btn.changed.connect(self.add_sink_widget)
         open_options_btn.changed.connect(self.open_options)
+        run_btn.changed.connect(self.make_model)
 
         # Size header buttons
         widgets = [add_sink_btn, open_options_btn, run_btn]
@@ -39,6 +42,29 @@ class PicassoWidget(Container):
 
         self.picasso_params = None
         self.BG = True
+
+
+    def make_model(self, **kwargs):
+        '''Make picasso neural network model and run asynchronously.'''
+        from picasso.nn_picasso import PICASSOnn
+        mm = self.mixing_matrix
+        model = PICASSOnn(mm[0,:,:])
+        self._progress = progress(range(kwargs.get('max_iter', 100)))
+        self._progress.set_description("Optimizing mixing parameters")
+        worker = create_worker(self.train_model, model, self.images,
+                                _connect={'returned': self.unmix_images,
+                                         'yielded': self.update_progress},
+                                 **kwargs)
+    # widget._make_model = make_model                                         #handle for testing
+
+
+    def train_model(self, model, images, **kwargs):
+
+        for i in model.train_loop(images, **kwargs):
+            yield i
+
+        return model.mixing_parameters
+
 
     def update_progress(self, iter):
 
