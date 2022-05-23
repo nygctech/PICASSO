@@ -4,6 +4,7 @@ import numpy as np
 import dask.array as da
 from napari_picasso.utils import get_layer_info, get_image_layers
 from napari_picasso.sink_widget import SinkWidget
+from napari_picasso.options_widget import Options
 from napari.qt.threading import create_worker
 from napari.utils import progress
 
@@ -40,9 +41,11 @@ class PicassoWidget(Container):
         self._viewer = viewer                                                   # napari viewer
         self._progress = None
         self._worker = None
+        self._options_widget = None
+        self._options = {}
 
         self.picasso_params = None
-        self.BG = True
+        self.sliders_visible = False
 
 
     def make_model(self, *args, **kwargs):
@@ -108,17 +111,35 @@ class PicassoWidget(Container):
             print('Number of sinks equal to number of images')
         elif len(self.image_choices) > 0:
             self.sinks = i
-            self.insert(i+1, SinkWidget(self._viewer, i, BG = self.BG))
+            ALPHA = self._options.get('manual', False)
+            BG = self._options.get('background', True)
+            self.insert(i+1, SinkWidget(self._viewer, i, ALPHA=ALPHA, BG=BG))
         else:
             print('No more images to add as sink')
 
 
 
     def open_options(self: Container):
-        print('Open options not implemented yet')
-                                                #unmix images and add new layer
+        if self._options_widget is None:
+            self._options_widget = Options()
+            self._options_widget.changed.connect(self.update_options)
+        self._options_widget.show()
+
+    def update_options(self: Container):
+        self._options = self._options_widget()
+        self.toggle_parameter_sliders()
+
+    def toggle_parameter_sliders(self: Container):
+
+        visible = self._options.get('manual', False)
+        if self.sliders_visible != visible:
+            for s in self.sinks:
+                self[f'sink{s}'].src_opts.toggle_sliders(visible)
+            self.sliders_visible = visible
+
 
     def unmix_images(self, mixing_matrix = None):
+        '''Unmix images and add unmixed images to new image layer.'''
 
         changed = False
         if mixing_matrix is not None:

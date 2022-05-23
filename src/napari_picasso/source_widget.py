@@ -31,7 +31,7 @@ class SourceWidget(Container):
     '''Select single source image and alpha mixing parameter pair.'''
 
     def __init__(self, viewer, images: [ImageData], index: int = 0, alpha: float = 0.01,
-                       background: float = 0.0, BG: bool = False, **kwargs):
+                       background: float = 0.0, BG: bool = False, ALPHA: bool = False, **kwargs):
 
         self._viewer = viewer
         self.index = index                                                      # Source index, int
@@ -40,7 +40,8 @@ class SourceWidget(Container):
         source_list.delete_btn.changed.connect(self.delete_source)
         self.source_list = source_list
 
-        alpha_slider = FloatSlider(max=2.0, step=0.01, name=f'alpha{index}', value = alpha, tracking = False)
+        alpha_slider = FloatSlider(max=2.0, step=0.01, name=f'alpha{index}',
+                                    value = alpha, tracking = False, visible = ALPHA)
         alpha_slider.max_width = 175
         self.alpha = alpha_slider
 
@@ -53,7 +54,7 @@ class SourceWidget(Container):
 
         super().__init__(
                          name=f'source{index}',
-                         labels = False
+                         labels = False, **kwargs
                         )
 
         self.append(source_list)
@@ -115,13 +116,16 @@ class SourceWidget(Container):
 
 
 
+
 class SourceOptions(Container):
     '''Define multiple source image and alpha pairs that spill over into the sink image.'''
 
-    def __init__(self, viewer, sink, index: int = 0,  mixing_params: dict = {}, BG: bool = False, **kwargs):
+    def __init__(self, viewer, sink, index: int = 0,  mixing_params: dict = {},
+                    ALPHA: bool = False, BG: bool = True, **kwargs):
 
         self._viewer = viewer                                                   # List of possible source images
-        self.BG = BG
+        self.BG = BG                                                            # Flag to show background slider
+        self.ALPHA = ALPHA                                                      # Flag to show alpha slider
         self._sink = sink
 
         add_source_btn = PushButton(name=f'addsrc', label = '+')
@@ -152,19 +156,27 @@ class SourceOptions(Container):
         if len(self.sources) >= len(self.image_choices):
             print('Max number of sources added')
         else:
-        # elif len(self.images) > 0:
+            BG = False if not self.ALPHA else self.BG
             self.sources = i
-            src = SourceWidget(self._viewer, self.image_choices, i, alpha, background, BG = self.BG, **kwargs)
+            src = SourceWidget(self._viewer, self.image_choices, i, alpha, background,
+                                        BG = BG, ALPHA = self.ALPHA, **kwargs)
             src.source_list.source_list.changed.connect(self.__call__)
             src.alpha.changed.connect(self.__call__)
             src.background.changed.connect(self.__call__)
             self.append(src)
-        # else:
-        #     print('No more images to add as source')
 
         self.__call__()
 
-
+    def toggle_sliders(self, ALPHA):
+        if self.ALPHA != ALPHA:
+            for s in self.sources:
+                if ALPHA:
+                    self[f'source{s}'].alpha.show()
+                    self[f'source{s}'].background.show()
+                else:
+                    self[f'source{s}'].alpha.hide()
+                    self[f'source{s}'].background.hide()
+            self.ALPHA = ALPHA
 
     @property
     def sources(self) -> [int]:

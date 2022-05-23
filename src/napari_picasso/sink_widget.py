@@ -6,7 +6,7 @@ from napari_picasso.source_widget import SourceOptions
 class SinkWidget(Container):
     '''Container to select sink image and spectra spillover source images.'''
 
-    def __init__(self, viewer, index, BG: bool = False):
+    def __init__(self, viewer, index, ALPHA: bool = False, BG: bool = True):
 
         images = get_image_layers(viewer)
 
@@ -36,6 +36,7 @@ class SinkWidget(Container):
         self.src_opts = None                                                    # source options widget
         self.n_sources = 0                                                      # Number of sources that spillover
         self.BG = BG                                                            # Flag to show background parameter
+        self.ALPHA = ALPHA                                                      # Flag to show alpha parameter
         self._viewer = viewer
 
     def show_sources(self) -> None:
@@ -43,7 +44,8 @@ class SinkWidget(Container):
 
         if self.src_opts is None:
             initial_sink = self.sink_list.current_choice
-            self.src_opts = SourceOptions(self._viewer, initial_sink, self.index, self.mixing_params, self.BG)
+            self.src_opts = SourceOptions(self._viewer, initial_sink, self.index, self.mixing_params,
+                                            BG = self.BG, ALPHA = self.ALPHA)
             self.src_opts.changed.connect(self.update_mixing_params)
 
         self.src_opts.show()
