@@ -5,5 +5,5 @@ contributions:
       title: PICASSO
       python_name: napari_picasso.main_widget:PicassoWidget
   widgets:
-    - command: napari-PICASSO.PicassoWidgetClass   # note, same as command.id above
+    - command: napari-PICASSO.PicassoWidget   # note, same as command.id above
       display_name: PICASSO

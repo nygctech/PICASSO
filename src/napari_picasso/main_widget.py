@@ -39,32 +39,52 @@ class PicassoWidget(Container):
         self.mixing_params = {}                                                 # Current mixing paramers {sink : {source:alpha}}
         self._viewer = viewer                                                   # napari viewer
         self._progress = None
+        self._worker = None
 
         self.picasso_params = None
         self.BG = True
 
 
-    def make_model(self, **kwargs):
+    def make_model(self, *args, **kwargs):
         '''Make picasso neural network model and run asynchronously.'''
         from picasso.nn_picasso import PICASSOnn
         mm = self.mixing_matrix
         model = PICASSOnn(mm[0,:,:])
         self._progress = progress(range(kwargs.get('max_iter', 100)))
         self._progress.set_description("Optimizing mixing parameters")
-        worker = create_worker(self.train_model, model, self.images,
-                                _connect={'returned': self.unmix_images,
-                                         'yielded': self.update_progress},
-                                 **kwargs)
+        self._worker = create_worker(self.train_model, model,
+                                _connect={
+                                    'returned': self.unmix_images,
+                                    'yielded': self.update_progress,
+                                    # 'started': self.start_train,
+                                    # 'finished': self.finished_train,
+                                    # 'errored': self.errored_train
+                                    },
+                                    **kwargs)
     # widget._make_model = make_model                                         #handle for testing
+    def start_train(self, *args):
+        print('Start training')
+        print(*args)
+
+    def finished_train(self, *args):
+        print('Finished training')
+        print(*args)
 
 
-    def train_model(self, model, images, **kwargs):
+    def errored_train(self, *args):
+        print('Error in training')
+        print(*args)
 
-        for i in model.train_loop(images, **kwargs):
+    def train_model(self, model, **kwargs):
+        # print('model sinks', model.n_sinks)
+        # print('model images', model.n_images)
+        # print('n images', len(self.images))
+        for i in model.train_loop(self.images, **kwargs):
             yield i
 
-        return model.mixing_parameters
+        # print(model.mixing_parameters)
 
+        return model.mixing_parameters
 
     def update_progress(self, iter):
 
@@ -130,6 +150,7 @@ class PicassoWidget(Container):
             else:
                 unmixed = fimages @ alpha[:,i]
             self._viewer.add_image(unmixed.reshape((row, col)), **layer_info)
+            print(f'added unmixed_{sink_name}')
 
         if changed:
             self.picasso_params = mixing_matrix
