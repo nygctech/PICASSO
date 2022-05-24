@@ -8,7 +8,14 @@ from napari_picasso.options_widget import Options
 from napari.qt.threading import create_worker
 from napari.utils import progress
 
+DA_TYPE = type(da.zeros(0))
+NP_TYPE = type(np.zeros(0))
 
+try:
+    import xarray as xr
+    XR_TYPE = type(xr.DataArray([0]))
+except:
+    XR_TYPE = None
 
 
 class PicassoWidget(Container):
@@ -141,6 +148,8 @@ class PicassoWidget(Container):
     def unmix_images(self, mixing_matrix = None):
         '''Unmix images and add unmixed images to new image layer.'''
 
+
+
         changed = False
         if mixing_matrix is not None:
             self.mixing_matrix = mixing_matrix
@@ -157,7 +166,10 @@ class PicassoWidget(Container):
 
         fimages_ = []
         for im in images:
-            fimages_.append(im.flatten())
+            if type(im) is XR_TYPE:
+                fimages_.append(im.data.flatten())
+            else:
+                fimages_.append(im.flatten())
         fimages = da.stack(fimages_, axis=1)
         row, col = im.shape
 
@@ -166,7 +178,7 @@ class PicassoWidget(Container):
             sink_name = image_names[sink_ind]
             layer_info = get_layer_info(self._viewer, sink_name)
             layer_info['name'] = 'unmixed_' + sink_name
-            if self.BG:
+            if self._options.get('BG', True):
                 unmixed = (fimages - bg[:,i].T) @ alpha[:,i]
             else:
                 unmixed = fimages @ alpha[:,i]
@@ -249,7 +261,8 @@ class PicassoWidget(Container):
         mix_dict = self.mixing_dict
         images = self.image_names                                               # list of image names
 
-        if self.BG:
+        BG = self._options.get('BG', True)
+        if BG:
             assert mm.ndim == 3
         else:
             assert mm.ndim == 2
@@ -264,7 +277,7 @@ class PicassoWidget(Container):
             for ii, source in enumerate(images):
                 if mm[0,ii,i] < 0 and sink != source:
                     mix_dict[sink][source]['alpha'] = -mm[0,ii,i]
-                    if self.BG:
+                    if BG:
                         mix_dict[sink][source]['background'] = mm[1,ii,i]
 
         self.mixing_dict = mix_dict

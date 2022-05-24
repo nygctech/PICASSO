@@ -457,9 +457,12 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
         # Get info about system
         if device is None:
             if torch.cuda.is_available():
+                torch.cuda.empty_cache()
                 self.device = 'cuda'
                 self.gpu_prop = torch.cuda.get_device_properties('cuda')
-                self.memory_size = self.gpu_prop.total_memory
+                self.memory_size = self.gpu_prop.total_memory - torch.cuda.memory_reserved()
+                #print('pytorch reserved', format_bytes(torch.cuda.memory_reserved()))
+                #self.memory_size = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
             else:
                 self.device = 'cpu'
                 self.sys_prop = psutil.virtual_memory()
@@ -468,7 +471,10 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
 
         # See if chunk will fit into memory
         self.fit_chunks = False
+        print('available memory', f_mem)
+        print('number of images',self.n_images)
         self.mem_per_chunk = self.memory_size/(self.chunk_byte*self.n_images)
+        print(self.mem_per_chunk)
         self.px_in_mem = self.mem_per_chunk/2*self.chunk_px
         if self.mem_per_chunk > 0.5:
             self.fit_chunks = True
@@ -484,6 +490,7 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
     def break_chunk(self, chunks):
         pim = self.px_in_mem
         n_breaks = ceil(self.chunk_px/pim)
+        print('pim', pim, 'number of breaks', n_breaks)
         chunks_ = []
         for i in range(n_breaks):
             if i < n_breaks-1:
