@@ -5,7 +5,8 @@ def get_layer_info(viewer, layer_name):
         ind = layer_names.index(layer_name)
         return viewer.layers[ind].as_layer_data_tuple()[1]
     else:
-        raise ValueError(f'{layer_name} not in viewer')
+        return None
+        # raise ValueError(f'{layer_name} not in viewer')
 
 
 def get_image_layers(viewer):

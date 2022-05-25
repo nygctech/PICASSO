@@ -120,7 +120,9 @@ class PicassoWidget(Container):
             self.sinks = i
             ALPHA = self._options.get('manual', False)
             BG = self._options.get('background', True)
-            self.insert(i+1, SinkWidget(self._viewer, i, ALPHA=ALPHA, BG=BG))
+            sink_widget = SinkWidget(self._viewer, i, ALPHA=ALPHA, BG=BG)
+            #sink_widget.changed.connect(self.manual_unmix)
+            self.insert(i+1, sink_widget)
         else:
             print('No more images to add as sink')
 
@@ -142,6 +144,14 @@ class PicassoWidget(Container):
         if self.sliders_visible != visible:
             for s in self.sinks:
                 self[f'sink{s}'].src_opts.toggle_sliders(visible)
+                self[f'sink{s}'].alpha = visible
+                if self._options.get('background', True) and visible:
+                    self[f'sink{s}'].background = visible
+                if visible:
+                    self[f'sink{s}'].src_opts.changed.connect(self.manual_unmix)
+                else:
+                    self[f'sink{s}'].src_opts.changed.connect(self[f'sink{s}'].update_mixing_params)
+
             self.sliders_visible = visible
 
     def unmix_images(self, mixing_matrix = None):
@@ -192,10 +202,25 @@ class PicassoWidget(Container):
 
         return unmixed.compute(), layer_info
 
+    def manual_unmix(self):
+
+        if self._options.get('manual', False):
+            self.unmix_images(self.mixing_matrix)
+
     def add_image(self, *args):
         image = args[0][0]
         layer_info = args[0][1]
-        self._viewer.add_image(image, **layer_info)
+        if get_layer_info(self._viewer, layer_info['name']) is None:
+            #Layer does not exist add image
+            self._viewer.add_image(image, **layer_info)
+        else:
+            #Layer exists, just update data
+            for i, l in enumerate(self._viewer.layers):
+                if l.name == layer_info['name']:
+                    self._viewer.layers[i].data = image
+                    break
+
+
 
     @property
     def sinks(self: Container) -> [int]:
@@ -215,7 +240,8 @@ class PicassoWidget(Container):
         mp = {}
         for s in self.sinks:
             sink = self[f'sink{s}']
-            mp[sink.sink_list.current_choice] = sink.mixing_params
+            #mp[sink.sink_list.current_choice] = sink.mixing_params
+            mp[sink.sink_list.current_choice] = sink.src_opts()
 
         self._mixing_dict = mp
 

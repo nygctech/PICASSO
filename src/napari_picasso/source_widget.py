@@ -76,8 +76,8 @@ class SourceWidget(Container):
         '''Tuple of source image and alpha mixing parameter.'''
 
         img = self.source_list.source_list.current_choice
-        alpha = self.alpha.value
-        background = self.background.value
+        alpha = self.alpha.get_value()
+        background = self.background.get_value()
 
         self._mixing_param = (img, alpha, background)
 
