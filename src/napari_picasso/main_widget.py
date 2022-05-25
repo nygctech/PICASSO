@@ -144,9 +144,9 @@ class PicassoWidget(Container):
         if self.sliders_visible != visible:
             for s in self.sinks:
                 self[f'sink{s}'].src_opts.toggle_sliders(visible)
-                self[f'sink{s}'].alpha = visible
+                self[f'sink{s}'].ALPHA = visible
                 if self._options.get('background', True) and visible:
-                    self[f'sink{s}'].background = visible
+                    self[f'sink{s}'].BG = visible
                 if visible:
                     self[f'sink{s}'].src_opts.changed.connect(self.manual_unmix)
                 else:
@@ -194,7 +194,7 @@ class PicassoWidget(Container):
         layer_info['name'] = 'unmixed_' + sink_name
 
         if self._options.get('BG', True):
-            unmixed = (fimages - bg) @ alpha
+            unmixed = da.clip((fimages - bg), 0, None) @ alpha
         else:
             unmixed = fimages @ alpha
         unmixed = da.clip(unmixed, 0, None)
