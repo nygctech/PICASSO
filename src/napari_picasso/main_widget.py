@@ -5,7 +5,7 @@ import dask.array as da
 from napari_picasso.utils import get_layer_info, get_image_layers
 from napari_picasso.sink_widget import SinkWidget
 from napari_picasso.options_widget import Options
-from napari.qt.threading import create_worker
+from napari.qt.threading import create_worker, thread_worker
 from napari.utils import progress
 
 DA_TYPE = type(da.zeros(0))
@@ -144,11 +144,8 @@ class PicassoWidget(Container):
                 self[f'sink{s}'].src_opts.toggle_sliders(visible)
             self.sliders_visible = visible
 
-
     def unmix_images(self, mixing_matrix = None):
         '''Unmix images and add unmixed images to new image layer.'''
-
-
 
         changed = False
         if mixing_matrix is not None:
@@ -176,17 +173,29 @@ class PicassoWidget(Container):
         for i in range(nsinks):
             sink_ind = np.where(mm[0,:,i] == 1)[0][0]
             sink_name = image_names[sink_ind]
-            layer_info = get_layer_info(self._viewer, sink_name)
-            layer_info['name'] = 'unmixed_' + sink_name
-            if self._options.get('BG', True):
-                unmixed = (fimages - bg[:,i].T) @ alpha[:,i]
-            else:
-                unmixed = fimages @ alpha[:,i]
-            self._viewer.add_image(unmixed.reshape((row, col)), **layer_info)
-            print(f'added unmixed_{sink_name}')
-
+            worker = create_worker(self.unmix, fimages, bg[:,i].T, alpha[:,i], row, col, sink_name,
+                                    _connect = {'returned':self.add_image})
         if changed:
             self.picasso_params = mixing_matrix
+
+    def unmix(self, fimages, bg, alpha, row, col, sink_name):
+
+        layer_info = get_layer_info(self._viewer, sink_name)
+        layer_info['name'] = 'unmixed_' + sink_name
+
+        if self._options.get('BG', True):
+            unmixed = (fimages - bg) @ alpha
+        else:
+            unmixed = fimages @ alpha
+        unmixed = da.clip(unmixed, 0, None)
+        unmixed = unmixed.reshape((row, col))
+
+        return unmixed.compute(), layer_info
+
+    def add_image(self, *args):
+        image = args[0][0]
+        layer_info = args[0][1]
+        self._viewer.add_image(image, **layer_info)
 
     @property
     def sinks(self: Container) -> [int]:
