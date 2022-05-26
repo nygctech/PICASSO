@@ -35,7 +35,7 @@ def image_formats():
 def test_dataloader_gpu(image):
     mm = np.array([[1],[-1],[-1]])
     model = PICASSOnn(mm)
-    assert model.device =='cuda'
+    assert model.device in ['cuda', 'cpu']
 
     dataset = model.get_dataset(image, ch_dim = -1)
     dataloader = DataLoader(dataset, shuffle=True, collate_fn = model.dask_collate)
