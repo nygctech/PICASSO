@@ -67,8 +67,8 @@ class SourceWidget(Container):
         '''Remove source widget.'''
 
         self.enabled = False
-        self.alpha.value = 0.0
-        self.close()
+        self.alpha.bind(0.0)
+        self.hide()
 
 
     @property
@@ -168,20 +168,29 @@ class SourceOptions(Container):
         self.__call__()
 
     def toggle_sliders(self, ALPHA):
-        if self.ALPHA != ALPHA:
-            for s in self.sources:
-                if ALPHA:
-                    self[f'source{s}'].alpha.show()
-                    self[f'source{s}'].background.show()
-                else:
-                    self[f'source{s}'].alpha.hide()
-                    self[f'source{s}'].background.hide()
-            self.ALPHA = ALPHA
+        '''if ALPHA is True show sliders else hide sliders.'''
+
+        for s in self.sources:
+            if ALPHA:
+                self[f'source{s}'].alpha.show()
+                self[f'source{s}'].background.show()
+            else:
+                self[f'source{s}'].alpha.hide()
+                self[f'source{s}'].background.hide()
+        self.ALPHA = ALPHA
 
     @property
     def sources(self) -> [int]:
         '''List of source indices.'''
-        self._sources = [int(s.name[6:]) for s in self._list if 'source' in s.name and s.enabled]
+
+        self._sources = []
+
+        for s in self._list:
+            if 'source' in s.name and s.enabled:
+                self._sources.append(int(s.name[6:]))
+            elif 'source' in s.name and not s.enabled:
+                self._list.remove(s)
+
         return self._sources
 
     @sources.setter
@@ -192,6 +201,7 @@ class SourceOptions(Container):
         for s in self.sources:
             self[f'source{s}'].delete_source()
         self._sources = []
+        self.add_source()
 
     # @property
     # def images(self) -> [str]:

@@ -65,10 +65,17 @@ class SinkWidget(Container):
         self.close()
 
     def set_sink(self) -> None:
+        '''Assign sink name and clear source options.'''
+
         sink_name = self.sink_list.current_choice
-        if self.src_opts is not None:
-            self.src_opts.sink = sink_name
-            self.src_opts = None
+        self.src_opts.sink = sink_name
+        self.update_mixing_params()
+        # self.mixing_params = self.src_opts()
+
+
+        # if self.src_opts is not None:
+        #     self.src_opts.sink = sink_name
+        #     self.mixing_params = None
 
         #update sources
 

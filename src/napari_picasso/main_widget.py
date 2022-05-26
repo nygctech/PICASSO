@@ -52,7 +52,6 @@ class PicassoWidget(Container):
         self._options = {}
 
         self.picasso_params = None
-        self.sliders_visible = False
 
 
     def make_model(self, *args, **kwargs):
@@ -141,18 +140,21 @@ class PicassoWidget(Container):
     def toggle_parameter_sliders(self: Container):
 
         visible = self._options.get('manual', False)
-        if self.sliders_visible != visible:
-            for s in self.sinks:
-                self[f'sink{s}'].src_opts.toggle_sliders(visible)
-                self[f'sink{s}'].ALPHA = visible
-                if self._options.get('background', True) and visible:
-                    self[f'sink{s}'].BG = visible
-                if visible:
-                    self[f'sink{s}'].src_opts.changed.connect(self.manual_unmix)
-                else:
-                    self[f'sink{s}'].src_opts.changed.connect(self[f'sink{s}'].update_mixing_params)
+        for s in self.sinks:
+            sink = self[f'sink{s}']
+            if sink.src_opts is not None:
+                if sink.src_opts.ALPHA != visible:
+                    sink.src_opts.toggle_sliders(visible)
 
-            self.sliders_visible = visible
+                    sink.ALPHA = visible
+                    if self._options.get('background', True) and visible:
+                        sink.BG = visible
+
+                    if visible:
+                        self[f'sink{s}'].src_opts.changed.connect(self.manual_unmix)
+                    else:
+                        self[f'sink{s}'].src_opts.changed.connect(self[f'sink{s}'].update_mixing_params)
+
 
     def unmix_images(self, mixing_matrix = None):
         '''Unmix images and add unmixed images to new image layer.'''
@@ -240,8 +242,8 @@ class PicassoWidget(Container):
         mp = {}
         for s in self.sinks:
             sink = self[f'sink{s}']
-            #mp[sink.sink_list.current_choice] = sink.mixing_params
-            mp[sink.sink_list.current_choice] = sink.src_opts()
+            mp[sink.sink_list.current_choice] = sink.mixing_params
+            #mp[sink.sink_list.current_choice] = sink.src_opts()
 
         self._mixing_dict = mp
 
@@ -272,7 +274,7 @@ class PicassoWidget(Container):
 
         '''
 
-        mix_dict = self.mixing_dict                                              # dictionary = {sink image :{source image: mixing param}}
+        mix_dict = self.mixing_dict                                             # dictionary = {sink image :{source image: mixing param}}
         images = self.image_names                                               # list of image names selected as sink or source
 
         mm = np.zeros((2, len(images), len(mix_dict)))
@@ -378,3 +380,25 @@ class PicassoWidget(Container):
         self._image_choices = images
 
         return images
+
+    @property
+    def ALPHA(self):
+        return self._ALPHA
+
+    @ALPHA.setter
+    def ALPHA(self, alpha):
+        if self.ALPHA != alpha:
+            self._ALPHA = alpha
+            if self.src_opts is not None:
+                self.src_opts.ALPHA = alpha
+
+    @property
+    def BG(self):
+        return self._BG
+
+    @BG.setter
+    def BG(self, bg):
+        if self.BG != bg:
+            self._BG = bg
+            if self.src_opts is not None:
+                self.src_opts.BG = bg
