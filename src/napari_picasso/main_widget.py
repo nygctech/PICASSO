@@ -190,6 +190,8 @@ class PicassoWidget(Container):
         if changed:
             self.picasso_params = mixing_matrix
 
+        return worker
+
     def unmix(self, fimages, bg, alpha, row, col, sink_name):
 
         layer_info = get_layer_info(self._viewer, sink_name)

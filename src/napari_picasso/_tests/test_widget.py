@@ -87,17 +87,17 @@ def test_set_mixdict(loaded_widget):
     assert loaded_widget.mixing_dict['sink']['source']['alpha'] == alpha
     assert  loaded_widget.mixing_dict['sink']['source']['background'] == 100
 
-def test_unmix_images(loaded_widget):
+def test_unmix_images(loaded_widget, qtbot):
 
     alpha = (2000*0.5)/(2000-100)
     mm = np.array([[[1], [-alpha]],[[0],[100]]])
     loaded_widget.mixing_matrix = mm
 
-    loaded_widget.unmix_images()
+    worker = loaded_widget.unmix_images()
 
-    layer_names = [l.name for l in loaded_widget._viewer.layers]
-
-    assert 'unmixed_sink' in layer_names
+    with qtbot.waitSignal(worker.finished):
+        layer_names = [l.name for l in loaded_widget._viewer.layers]
+        assert 'unmixed_sink' in layer_names
 
 
 def test_picasso_widget(loaded_widget, capsys):
