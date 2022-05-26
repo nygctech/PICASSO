@@ -61,7 +61,7 @@ class PicassoWidget(Container):
         model = PICASSOnn(mm[0,:,:])
         self._progress = progress(range(kwargs.get('max_iter', 100)))
         self._progress.set_description("Optimizing mixing parameters")
-        self._worker = create_worker(self.train_model, model,
+        worker = create_worker(self.train_model, model,
                                 _connect={
                                     'returned': self.unmix_images,
                                     'yielded': self.update_progress,
@@ -70,6 +70,9 @@ class PicassoWidget(Container):
                                     # 'errored': self.errored_train
                                     },
                                     **kwargs)
+
+        return worker
+
     # widget._make_model = make_model                                         #handle for testing
     def start_train(self, *args):
         print('Start training')
@@ -91,7 +94,7 @@ class PicassoWidget(Container):
         for i in model.train_loop(self.images, **kwargs):
             yield i
 
-        # print(model.mixing_parameters)
+        self.picasso_params = model.mixing_parameters
 
         return model.mixing_parameters
 
@@ -159,10 +162,8 @@ class PicassoWidget(Container):
     def unmix_images(self, mixing_matrix = None):
         '''Unmix images and add unmixed images to new image layer.'''
 
-        changed = False
         if mixing_matrix is not None:
             self.mixing_matrix = mixing_matrix
-            changed = True
 
         mm = self.mixing_matrix
         images = self.images
@@ -187,8 +188,6 @@ class PicassoWidget(Container):
             sink_name = image_names[sink_ind]
             worker = create_worker(self.unmix, fimages, bg[:,i].T, alpha[:,i], row, col, sink_name,
                                     _connect = {'returned':self.add_image})
-        if changed:
-            self.picasso_params = mixing_matrix
 
         return worker
 
@@ -209,7 +208,7 @@ class PicassoWidget(Container):
     def manual_unmix(self):
 
         if self._options.get('manual', False):
-            self.unmix_images(self.mixing_matrix)
+            self.unmix_images()
 
     def add_image(self, *args):
         image = args[0][0]

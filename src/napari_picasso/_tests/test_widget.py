@@ -4,6 +4,7 @@ from napari_picasso.utils import get_image_layers
 import numpy as np
 import napari
 import pytest
+import pytestqt
 import time
 
 @pytest.fixture
@@ -96,17 +97,23 @@ def test_unmix_images(loaded_widget, qtbot):
     worker = loaded_widget.unmix_images()
 
     with qtbot.waitSignal(worker.finished):
-        layer_names = [l.name for l in loaded_widget._viewer.layers]
-        assert 'unmixed_sink' in layer_names
+        pass
+
+    layer_names = [l.name for l in loaded_widget._viewer.layers]
+    assert 'unmixed_sink' in layer_names
 
 
-def test_picasso_widget(loaded_widget, capsys):
-    loaded_widget.make_model(max_iter = 10)
+def test_picasso_widget(loaded_widget, capsys, qtbot):
+    worker = loaded_widget.make_model(max_iter = 10)
     captured = capsys.readouterr()
     assert captured.out.split(' ')[1].strip() in ['cpu', 'cuda']
-
     assert loaded_widget._progress.total == 10
-    assert loaded_widget._worker is not None
+
+    with qtbot.waitSignal(worker.finished, timeout=120*1000):
+        pass
+
+    assert loaded_widget.picasso_params is not None
+
 
     #     if loaded_widget.picasso_params is not None:
     #         break
