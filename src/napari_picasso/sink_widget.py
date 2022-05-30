@@ -55,7 +55,8 @@ class SinkWidget(Container):
     def update_mixing_params(self) -> None:
         '''Update mixing parameters, saved as {source image: alpha}.'''
 
-        self.mixing_params = self.src_opts()
+        if self.src_opts is not None:
+            self.mixing_params = self.src_opts()
 
 
     def del_sink(self) -> None:
@@ -68,7 +69,8 @@ class SinkWidget(Container):
         '''Assign sink name and clear source options.'''
 
         sink_name = self.sink_list.current_choice
-        self.src_opts.sink = sink_name
+        if self.src_opts is not None:
+            self.src_opts.sink = sink_name
         self.update_mixing_params()
         # self.mixing_params = self.src_opts()
 

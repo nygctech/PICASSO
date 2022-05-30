@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from dask.utils import format_bytes
 import psutil
-from math import ceil
+from math import ceil, floor, log
 from typing import Union
 
 from mine.mine import MINE
@@ -18,7 +18,7 @@ from mine.mine import MINE
 
 DA_TYPE = type(da.zeros(0))
 NP_TYPE = type(np.zeros(0))
-IL_TYPE = type(Image(np.zeros((1,1))))
+TT_TYPE = type(torch.tensor(0))
 
 try:
     import xarray as xr
@@ -26,20 +26,74 @@ try:
 except:
     XR_TYPE = None
 
+def get_device(device = None):
+    assert device in [None, 'cpu', 'cuda']
+
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    return device
+
+def collate(chunk_, dtype = torch.float32):
+    '''Return tensor to dataloader.
+
+       Take chunk and transfer to cuda asynchronously if chunk is tensor
+
+       If chunk is a dask array, compute chunk and convert into tensor
+
+    '''
+
+    device = get_device()
+    iscuda = device == 'cuda'
+
+    _type = type(chunk_)
+
+    assert _type in [DA_TYPE, TT_TYPE, list], f'Expected dask array or list, got {_type}'
+    if _type is list:
+        _type = type(chunk_[0])
+        assert _type in [DA_TYPE, TT_TYPE]
+        chunk_ = chunk_[0]
+
+    if _type is TT_TYPE:
+        if chunk_.device.type != device:
+            chunk_ = chunk_.to(device, non_blocking = iscuda)
+        return chunk_
+    else:
+        return torch.tensor(chunk_.compute(), dtype=dtype, device=device)
+
+
+
+def get_memory(device = None):
+    '''Get size of memory on system.'''
+
+    device = get_device(device)
+
+    if device == 'cuda':
+        torch.cuda.empty_cache()
+        gpu_prop = torch.cuda.get_device_properties('cuda')
+        memory_size = gpu_prop.total_memory - torch.cuda.memory_reserved()
+    else:
+        sys_prop = psutil.virtual_memory()
+        memory_size = sys_prop.available
+
+    return memory_size
+
+
+
 class PICASSOnn(nn.Module):
     def __init__(self, mixing_matrix,
                  transform: Union[None, nn.Module] = None,
                  background: bool = True,
                  px_bit_depth: int = 12,
-                 mi_weight: float  = 0.9):
+                 mi_weight: float  = 0.9,
+                 **kwargs):
 
         super().__init__()
 
-        if torch.cuda.is_available():
-            self.device = 'cuda'
-        else:
-            self.device = 'cpu'
+
+        self.device = get_device(kwargs.get('device', None))
         print('Using', self.device)
+
         self.mixing_matrix = mixing_matrix
         self.pairs = self.mixing_matrix                                         # Pairs property take mixing matrix as input to set
 
@@ -138,17 +192,12 @@ class PICASSOnn(nn.Module):
 
         for i in range(1, max_iter + 1):
 
-            dataloader = DataLoader(dataset, shuffle=True, collate_fn = self.dask_collate)
+            dataloader = DataLoader(dataset, shuffle=True, collate_fn = collate, **kwargs)
             batch_loss = 0; batch_mi_loss = 0; batch_contrast_loss = 0
-            for batch, im_list in enumerate(dataloader):
+            for batch, ims in enumerate(dataloader):
 
-                if len(im_list) == 1:
-                    im = im_list[0]
-                else:
-                    im = torch.stack(im_list, dim=0)
-
-                opt.zero_grad()
-                total_loss, mi_loss, contrast_loss  = self.forward(im)
+                opt.zero_grad(set_to_none=True)                                 # per documentation saves memory
+                total_loss, mi_loss, contrast_loss  = self.forward(ims)
                 total_loss.backward()
 
                 # Save mixing parameters over iterations
@@ -203,7 +252,7 @@ class PICASSOnn(nn.Module):
             for i in images:
                 im_type = type(i)
 
-                if im_type in [IL_TYPE, XR_TYPE]:
+                if im_type is XR_TYPE:
                     i = i.data
                     im_type = type(i)
 
@@ -246,7 +295,7 @@ class PICASSOnn(nn.Module):
 
         dataset = da.stack(im_stack, axis=1)
 
-        return PICASSO_Dataset(dataset, rows, cols, dtype, px_per_chunk=batch_size)
+        return PICASSO_Dataset(dataset, rows, cols, dtype, px_per_chunk=batch_size, device = self.device)
 
 
 
@@ -273,19 +322,19 @@ class PICASSOnn(nn.Module):
 
         return da.stack(unmixed_, axis = 0)
 
-
-    def dask_collate(self, chunks_, dtype = torch.float32):
-
-        _type = type(chunks_)
-
-        assert _type in [DA_TYPE, list], f'Expected dask array or list, got {_type}'
-
-        if _type is DA_TYPE:
-            chunks = torch.tensor(chunks_.compute(), dtype=dtype, device = self.device)
-        elif _type is list:
-            chunks = [torch.tensor(c.compute(), dtype=dtype, device = self.device) for c in chunks_ ]
-
-        return chunks
+    #
+    # def dask_collate(self, chunk_, dtype = torch.float32):
+    #
+    #     _type = type(chunk_)
+    #
+    #     assert _type in [DA_TYPE, list], f'Expected dask array or list, got {_type}'
+    #     if _type is list:
+    #         assert isinstance(chunk_[0], DA_TYPE)
+    #         chunk_ = chunk_[0]
+    #
+    #     chunk = torch.tensor(chunk_.compute(), dtype=dtype, device = self.device)
+    #
+    #     return chunk
 
 
     @property
@@ -435,16 +484,18 @@ class MixModel(nn.Module):
 
 class PICASSO_Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, dataset, rows, cols, dtype, device = None, px_per_chunk=-1):
+    def __init__(self, dataset, rows, cols, dtype, device = 'cpu', px_per_chunk=-1):
 
         super().__init__()
 
         # Get info about dataset
         self.rows = rows; self.cols = cols; self.dtype = dtype                  # height, width, and dtype of images
-        self.max_px = dataset.max().compute()                                   # max pixel value in images
-        self.dataset = dataset.astype('float32')/self.max_px                    # pixels normalized to 1
+        self.max_px = dataset.max().compute()                                   # max pixel value in image
+        dataset = dataset.astype('float32')/self.max_px                         # pixels normalized to 1
+        self.dataset = torch.tensor(dataset.compute(), dtype=torch.float32, )
+
         self.blocks_per_image, self.n_images = dataset.blocks.shape             # chunk/blocks in each image, number of images
-        self.px_byte = np.dtype(dataset.dtype).itemsize                         # bytes of each pixel
+        self.px_byte = 4                                                        # bytes of each pixel
         #size of chunk in bytes
         self.chunk_byte = 1
         chunksize = dataset.chunksize
@@ -454,49 +505,66 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
         self.chunk_byte *= self.px_byte*self.n_images
         self.chunk_px = chunksize[0]                                            # number of pixels in each chunk
 
-        # Get info about system
-        if device is None:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                self.device = 'cuda'
-                self.gpu_prop = torch.cuda.get_device_properties('cuda')
-                self.memory_size = self.gpu_prop.total_memory - torch.cuda.memory_reserved()
-                #print('pytorch reserved', format_bytes(torch.cuda.memory_reserved()))
-                #self.memory_size = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
-            else:
-                self.device = 'cpu'
-                self.sys_prop = psutil.virtual_memory()
-                self.memory_size = self.sys_prop.available
+        self.memory_size = get_memory(device)
         f_mem = format_bytes(self.memory_size)
 
         # See if chunk will fit into memory
-        self.fit_chunks = False
-        print('available memory', f_mem)
-        print('number of images',self.n_images)
-        self.mem_per_chunk = self.memory_size/(self.chunk_byte*self.n_images)
-        print(self.mem_per_chunk)
-        self.px_in_mem = self.mem_per_chunk/2*self.chunk_px
-        if self.mem_per_chunk > 0.5:
-            self.fit_chunks = True
+        self.max_px_in_mem = 2**floor(log(self.memory_size/8000,2))
+        self.fit_chunks = True if self.chunk_px < self.max_px_in_mem else False
+
+        # If dataset can fit into GPU, moving to tensor on GPU
+        # If dataset is larger the GPU memory but can fit into CPU memory, put dataset into tensor  in pinned CPU memory
+        # If dataset is larger than CPU memory, keep as dask arrray, and let collate function move chunks to GPU during training (slow)
+        dataset_size = self.chunk_byte * self.blocks_per_image
+        if dataset_size < self.max_px_in_mem:
+            # entire dataset can fit into gpu
+            # assume if it can fit into gpu it can also fit into cpu
+            self.dataset = torch.tensor(dataset.compute(), dtype=torch.float32, device=device)
+        else:
+            if dataset_size < get_memory('cpu') :
+                # entire dataset can fit on cpu memory
+                self.dataset = torch.tensor(dataset.compute(), dtype=torch.float32, device='cpu')
+                if device == 'cuda':
+                    self.dataset = self.dataset.pin_memory()
+            else:
+                # dataset is big and can't fit into cpu memory, leave as dask array
+                # training will be slow
+                self.dataset = dataset
+
+
+
+
+
+        # if not self.fit_chunks:
+        #     figure out how to break chunks
+        #     chunk_px/max_px_in_mem
+
+        # print('available memory', f_mem)
+        # print('number of images',self.n_images)
+        # self.chunks_in_memory = self.memory_size/self.chunk_byte
+        # print(self.chunks_in_memory)
+        # self.px_in_mem = format_bytes(torch.cuda.get_device_properties('cuda').total_memory/262144)
+        # if self.chunks_in_memory >= 2:
+        #     self.fit_chunks = True
 
         # set pixels per chunk
         if px_per_chunk > 0:
-            assert px_per_chunk <= self.px_in_mem, f'Can only fit {self.px_in_mem} px in {f_mem} memory, not {px_per_chunk}'
+            assert px_per_chunk <= self.max_px_in_mem, f'Can only fit {self.max_px_in_mem} px in {f_mem} memory, not {px_per_chunk}'
             self.fit_chunks = False
-            self.px_in_mem = px_per_chunk
+            self.max_px_in_mem = px_per_chunk
 
         self.chunks = self.dataset
 
     def break_chunk(self, chunks):
-        pim = self.px_in_mem
-        n_breaks = ceil(self.chunk_px/pim)
-        print('pim', pim, 'number of breaks', n_breaks)
+
+        n_breaks = ceil(self.chunk_px/self.max_px_in_mem)
+        px = 2**floor(log(self.chunk_px/n_breaks,2))
+
         chunks_ = []
         for i in range(n_breaks):
-            if i < n_breaks-1:
-                chunks_.append(chunks[i*pim:(i+1)*pim,:])
-            else:
-                chunks_.append(chunks[i*pim:-1,:])
+            start_ind = i*px
+            stop_ind = min(start_ind + px, self.chunk_px)
+            chunks_.append(chunks[start_ind:stop_ind,:])
 
         return chunks_
 
@@ -507,7 +575,21 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
         return self.chunks[index]
 
     def __iter__(self):
-        return iter(self.chunks)
+
+            worker_info = torch.utils.data.get_worker_info()
+            if worker_info is None:
+            # single-process data loading, return the full iterator
+                return iter(self.chunks)
+            else:
+            # in a worker process
+            # split workload
+                n_chunks = len(self.chunks)
+                per_worker = int(ceil(n_chunks / float(worker_info.num_workers)))
+                worker_id = worker_info.id
+                start_ind = worker_id * per_worker
+                stop_ind = min(start_ind + per_worker, n_chunks+1)
+                return iter(self.chunks[start_ind:stop_ind])
+
 
 
     @property
