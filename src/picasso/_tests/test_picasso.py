@@ -1,5 +1,5 @@
 import pytest
-from picasso.nn_picasso import PICASSOnn
+from picasso.nn_picasso import PICASSOnn, collate
 from torch.utils.data import DataLoader
 from skimage.data import astronaut
 import numpy as np
@@ -38,7 +38,7 @@ def test_dataloader_gpu(image):
     assert model.device in ['cuda', 'cpu']
 
     dataset = model.get_dataset(image, ch_dim = -1)
-    dataloader = DataLoader(dataset, shuffle=True, collate_fn = model.dask_collate)
+    dataloader = DataLoader(dataset, shuffle=True, collate_fn = collate)
 
     for batch, im_list in enumerate(dataloader):
         assert batch == 0
