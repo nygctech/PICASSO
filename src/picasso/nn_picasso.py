@@ -176,23 +176,23 @@ class PICASSOnn(nn.Module):
         mix_params = [self.transform.alpha]
         bg_params = [self.transform.background]
 
-
         if opt is None:
             opt = torch.optim.Adam([{'params':self.mine_params, 'lr':lr},
                                     {'params':mix_params, 'lr': lr/3},
                                     {'params':bg_params, 'lr': lr/10}
                                    ])
-
+                                   
         mix_params_ = []
         mi_loss_ = []
         contrast_loss_ = []
 
         dataset = self.get_dataset(images, batch_size = batch_size)
         self.max_px = dataset.max_px
+        num_workers = kwargs.get('num_workers', 0)
 
         for i in range(1, max_iter + 1):
 
-            dataloader = DataLoader(dataset, shuffle=True, collate_fn = collate, **kwargs)
+            dataloader = DataLoader(dataset, shuffle=True, collate_fn = collate, num_workers = num_workers)
             batch_loss = 0; batch_mi_loss = 0; batch_contrast_loss = 0
             for batch, ims in enumerate(dataloader):
 

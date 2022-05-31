@@ -60,7 +60,9 @@ class PicassoWidget(Container):
         from picasso.nn_picasso import PICASSOnn
         mm = self.mixing_matrix
         model = PICASSOnn(mm[0,:,:])
-        self._progress = progress(range(kwargs.get('max_iter', 100)))
+        options = self._options
+        options.update(**kwargs)
+        self._progress = progress(range(options.get('max_iter', 100)))
         self._progress.set_description("Optimizing mixing parameters")
         worker = create_worker(self.train_model, model,
                                 _connect={
@@ -70,7 +72,7 @@ class PicassoWidget(Container):
                                     # 'finished': self.finished_train,
                                     # 'errored': self.errored_train
                                     },
-                                    **kwargs)
+                                    **options)
 
         return worker
 
@@ -135,11 +137,55 @@ class PicassoWidget(Container):
         if self._options_widget is None:
             self._options_widget = Options()
             self._options_widget.changed.connect(self.update_options)
+
+        # Enable reverting back to picasso params if sinks and sources match
+        self._options_widget.picasso_params.enabled = self.sink_sources_match(self.picasso_params, self.mixing_dict)
         self._options_widget.show()
 
     def update_options(self: Container):
         self._options = self._options_widget()
         self.toggle_parameter_sliders()
+        if self._options_widget.picasso_params.value:
+            self.revert_to_picasso_params()
+
+    def sink_sources_dict(self, parameters):
+        '''Cast mixing_dict or mixing_matrix as sink:set(sources) dictionary.'''
+
+        assert type(parameters) in [NP_TYPE, dict]
+
+        ss_dict = {}
+        if isinstance(parameters, dict):
+        # mixing_dict -> sink:set(sources)
+            for sink in parameters.keys():
+                ss_dict[sink] = set(parameters[sink].keys())
+        elif isinstance(parameters, NP_TYPE):
+        # mixing_matrix -> sink:set(sources)
+            images = np.array(self.image_names)                                 # list of image names selected as sink or source
+            ab, sources, sinks = parameters.shape
+
+            for col in range(sinks):
+                sink = images[parameters[0,:,col] == 1][0]
+                sources = set(images[parameters[0,:,col] < 0])
+                ss_dict[sink] = set(sources)
+
+        return ss_dict
+
+    def sink_sources_match(self, param1, param2):
+        try:
+            p1 = self.sink_sources_dict(param1)
+            p2 = self.sink_sources_dict(param2)
+        except:
+            return False
+
+        return p1 == p2
+
+
+    def revert_to_picasso_params(self: Container):
+
+        if self.picasso_params is not None:
+            if self.sink_sources_match(self.picasso_params, self.mixing_dict):
+                self.unmix_images(self.picasso_params)
+
 
     def toggle_parameter_sliders(self: Container):
 
