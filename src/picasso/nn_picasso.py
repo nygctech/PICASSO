@@ -583,11 +583,14 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
             else:
             # in a worker process
             # split workload
+                #print(worker_info.id, 'in iter')
                 n_chunks = len(self.chunks)
                 per_worker = int(ceil(n_chunks / float(worker_info.num_workers)))
                 worker_id = worker_info.id
+                #print(worker_id, n_chunks, per_worker)
                 start_ind = worker_id * per_worker
                 stop_ind = min(start_ind + per_worker, n_chunks+1)
+                #print(worker_id, start_ind, stop_ind)
                 return iter(self.chunks[start_ind:stop_ind])
 
 

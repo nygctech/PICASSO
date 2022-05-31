@@ -2,7 +2,7 @@ from magicgui.widgets import PushButton, FloatSlider, Container, ComboBox
 from napari.types import ImageData
 import numpy as np
 from napari_picasso.utils import get_layer_info, get_image_layers
-from napari.utils.notifications import show_warning
+from napari.utils.notifications import show_info
 
 class _SourceList(Container):
     '''Source image ComboBox and delete button.'''
@@ -155,7 +155,7 @@ class SourceOptions(Container):
             i += 1
 
         if len(self.sources) >= len(self.image_choices):
-            show_warning('Max number of sources added')
+            show_info('Max number of sources added')
         else:
             BG = False if not self.ALPHA else self.BG
             self.sources = i

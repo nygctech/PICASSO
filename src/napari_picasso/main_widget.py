@@ -7,7 +7,7 @@ from napari_picasso.sink_widget import SinkWidget
 from napari_picasso.options_widget import Options
 from napari.qt.threading import create_worker, thread_worker
 from napari.utils import progress
-from napari.utils.notifications import show_warning
+from napari.utils.notifications import show_info
 
 DA_TYPE = type(da.zeros(0))
 NP_TYPE = type(np.zeros(0))
@@ -118,7 +118,7 @@ class PicassoWidget(Container):
             i += 1
 
         if len(self.sinks) >= len(get_image_layers(self._viewer)):
-            show_warning('Number of sinks equal to number of images')
+            show_info('Number of sinks equal to number of images')
         elif len(self.image_choices) > 0:
             self.sinks = i
             ALPHA = self._options.get('manual', False)
@@ -127,7 +127,7 @@ class PicassoWidget(Container):
             #sink_widget.changed.connect(self.manual_unmix)
             self.insert(i+1, sink_widget)
         else:
-            show_warning('No more images to add as sink')
+            show_info('No more images to add as sink')
 
 
 
@@ -377,7 +377,7 @@ class PicassoWidget(Container):
                 image_names.pop(ind)
                 images.pop(ind)
             except ValueError:
-                show_warning(f'{sink_name} selected as sink image more than once')
+                show_info(f'{sink_name} selected as sink image more than once')
 
         self._image_choices = images
 
