@@ -73,6 +73,7 @@ venv/
 
 # IPython Notebook
 .ipynb_checkpoints
+notebooks/*.tiff
 
 # pyenv
 .python-version
