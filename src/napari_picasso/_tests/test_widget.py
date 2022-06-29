@@ -96,7 +96,7 @@ def test_unmix_images(loaded_widget, qtbot):
 
     worker = loaded_widget.unmix_images()
 
-    with qtbot.waitSignal(worker.finished):
+    with qtbot.waitSignal(worker.finished, timeout=120*1000):
         pass
 
     layer_names = [l.name for l in loaded_widget._viewer.layers]
