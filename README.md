@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/pypi/l/napari-curtain.svg?color=green)](https://github.com/nygctech/PICASSO/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/napari-PICASSO.svg?color=green)](https://pypi.org/project/napari-PICASSO)
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-PICASSO.svg?color=green)](https://python.org)
-[![tests](https://github.com/nygctech/napari-PICASSO/workflows/tests/badge.svg)](https://github.com/nygctech/napari-PICASSO/actions)
+[![tests](https://github.com/nygctech/PICASSO/actions/workflows/test_and_deploy.yml/badge.svg?event=push)](https://github.com/nygctech/PICASSO/actions/workflows/test_and_deploy.yml)
 [![codecov](https://codecov.io/gh/nygctech/napari-PICASSO/branch/main/graph/badge.svg)](https://codecov.io/gh/nygctech/napari-PICASSO)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-PICASSO)](https://napari-hub.org/plugins/napari-PICASSO)
 
@@ -11,9 +11,19 @@ Unmix spectral spillover
 
 ![](https://user-images.githubusercontent.com/72306584/176486552-50e1bca9-65fd-4466-8c92-a114e48d2278.gif)
 
-## Usage
+## Automatic Usage
 
-You can find the `PICASSO` plugin in the menu `Plugins > napari-PICASSO: PICASSO`. Select sink images that have spectral spillover from corresponding source images, then click run. 
+You can find the `PICASSO` plugin in the menu `Plugins > napari-PICASSO: PICASSO`. Select sink images that have spectral spillover from corresponding source images, then click run to optimise the mixing parameters with PICASSO. 
+
+## Manual Usage
+
+![](https://user-images.githubusercontent.com/72306584/176505151-572bd762-abe6-47b1-9821-4f3aaa4704c9.gif)
+
+Select the manual button in options pop up window. Then select sink images that have spectral spillover from corresponding source images. In the source images window, sliders for each $source$ control the mixing spillover, $m$ (top), and background, $b$ (bottom, optional).
+
+## Mixing model
+
+$$ sink = \sum_{i} m_i(source - b_i) $$
 
 ## Installation
 
