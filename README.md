@@ -13,7 +13,7 @@ Unmix spectral spillover
 
 ## Usage
 
-You find the `PICASSO` plugin in the menu `Plugins > napari-PICASSO: PICASSO`. Select sink images that have spectral spillover from corresponding source images, then click run. 
+You can find the `PICASSO` plugin in the menu `Plugins > napari-PICASSO: PICASSO`. Select sink images that have spectral spillover from corresponding source images, then click run. 
 
 ## Installation
 
@@ -34,3 +34,8 @@ PICASSO is an algorithm to remove spillover fluorescence by minimizing the mutua
 1. Seo, J. et al. PICASSO allows ultra-multiplexed fluorescence imaging of spatially overlapping proteins without reference spectra measurements. Nat Commun 13, 2475 (2022).
 2. Belghazi, M. I. et al. MINE: Mutual Information Neural Estimation. arXiv:1801.04062 [cs, stat] (2018).
 
+
+[napari]: https://github.com/napari/napari
+[tox]: https://tox.readthedocs.io/en/latest/
+[pip]: https://pypi.org/project/pip/
+[PyPI]: https://pypi.org/
