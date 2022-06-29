@@ -1,3 +1,6 @@
+from math import log, ceil, floor
+
+
 def adj_to_mixing(adj_matrix):
     '''Convert adjacency matrix to mixing matrix.'''
 
@@ -26,3 +29,11 @@ def adj_to_mixing(adj_matrix):
             sink_ind += 1
 
     return mm
+
+def exp_ceil(x, base=2):
+
+    return base**ceil(log(x, base))
+
+def exp_floor(x, base=2):
+
+    return base**floor(log(x, base))

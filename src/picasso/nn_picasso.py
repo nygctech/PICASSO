@@ -5,7 +5,7 @@ from napari.layers import Image
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 
 from dask.utils import format_bytes
 import psutil
@@ -14,6 +14,7 @@ from typing import Union
 
 from mine.mine import MINE
 
+from picasso.utils import exp_ceil, exp_floor
 
 
 DA_TYPE = type(da.zeros(0))
@@ -181,7 +182,7 @@ class PICASSOnn(nn.Module):
                                     {'params':mix_params, 'lr': lr/3},
                                     {'params':bg_params, 'lr': lr/10}
                                    ])
-                                   
+
         mix_params_ = []
         mi_loss_ = []
         contrast_loss_ = []
@@ -192,7 +193,9 @@ class PICASSOnn(nn.Module):
 
         for i in range(1, max_iter + 1):
 
-            dataloader = DataLoader(dataset, shuffle=True, collate_fn = collate, num_workers = num_workers)
+            #dataloader = DataLoader(dataset, shuffle=True, collate_fn = collate, num_workers = num_workers)
+            dataloader = DataLoader(dataset, collate_fn = collate, num_workers = num_workers,
+                                    sampler=RandomSampler(dataset, num_samples=dataset.subset_chunks, replacement=True))
             batch_loss = 0; batch_mi_loss = 0; batch_contrast_loss = 0
             for batch, ims in enumerate(dataloader):
 
@@ -484,15 +487,19 @@ class MixModel(nn.Module):
 
 class PICASSO_Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, dataset, rows, cols, dtype, device = 'cpu', px_per_chunk=-1):
+    def __init__(self, dataset, rows, cols, dtype, device = 'cpu', px_per_chunk=-1, subset=True, **kwargs):
 
         super().__init__()
 
+
+
         # Get info about dataset
         self.rows = rows; self.cols = cols; self.dtype = dtype                  # height, width, and dtype of images
+        self.total_px = rows*cols
         self.max_px = dataset.max().compute()                                   # max pixel value in image
+        self.min_px = dataset.min().compute()                                   # min pixel value in image
         dataset = dataset.astype('float32')/self.max_px                         # pixels normalized to 1
-        self.dataset = torch.tensor(dataset.compute(), dtype=torch.float32, )
+        #self.dataset = torch.tensor(dataset.compute(), dtype=torch.float32, )
 
         self.blocks_per_image, self.n_images = dataset.blocks.shape             # chunk/blocks in each image, number of images
         self.px_byte = 4                                                        # bytes of each pixel
@@ -509,8 +516,11 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
         f_mem = format_bytes(self.memory_size)
 
         # See if chunk will fit into memory
-        self.max_px_in_mem = 2**floor(log(self.memory_size/8000,2))
-        self.fit_chunks = True if self.chunk_px < self.max_px_in_mem else False
+        self.max_px_in_mem = exp_floor(self.memory_size/8000)
+        self.fit_chunks = self.chunk_px < self.max_px_in_mem
+        if not self.fit_chunks:
+            self.n_breaks = ceil(self.chunk_px/self.max_px_in_mem)
+            self.px_per_chunk = 2**floor(log(self.chunk_px/self.n_breaks,2))
 
         # If dataset can fit into GPU, moving to tensor on GPU
         # If dataset is larger the GPU memory but can fit into CPU memory, put dataset into tensor  in pinned CPU memory
@@ -547,29 +557,46 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
         # if self.chunks_in_memory >= 2:
         #     self.fit_chunks = True
 
-        # set pixels per chunk
+        # overide max_px_in_mem with px_per_chunk if it can fit into memory
         if px_per_chunk > 0:
             assert px_per_chunk <= self.max_px_in_mem, f'Can only fit {self.max_px_in_mem} px in {f_mem} memory, not {px_per_chunk}'
             self.fit_chunks = False
             self.max_px_in_mem = px_per_chunk
 
+
         self.chunks = self.dataset
 
-    def break_chunk(self, chunks):
+        if subset:
+            print('pixels in chunk', self.max_px_in_mem)
+            min_n_px = ceil(self.min_samples(**kwargs))
+            print('min number pixels', min_n_px)
+            if min_n_px < self.total_px:
+                self.subset_chunks = ceil(min_n_px/self.max_px_in_mem)
+            else:
+                self.subset_chunks = 1
+            print('Chunks per iteration:', self.subset_chunks)
+            print((self.subset_chunks*self.max_px_in_mem)/(rows*cols)*100, '% of pixels used')
+        else:
+            self.subset_chunks = self.length
 
-        n_breaks = ceil(self.chunk_px/self.max_px_in_mem)
-        px = 2**floor(log(self.chunk_px/n_breaks,2))
+
+    def break_chunk(self, chunk):
+        '''Break chunk into smaller chunks.'''
+
+        small_px = self.px_per_chunk
+        big_px = chunk.shape[0]
 
         chunks_ = []
-        for i in range(n_breaks):
-            start_ind = i*px
-            stop_ind = min(start_ind + px, self.chunk_px)
-            chunks_.append(chunks[start_ind:stop_ind,:])
+        for i in range(ceil(big_px//small_px)):
+            start_ind = i*small_px
+            stop_ind = min(start_ind + small_px, big_px)
+            test = chunk[start_ind:stop_ind,:]
+            chunks_.append(chunk[start_ind:stop_ind,:])
 
         return chunks_
 
     def __len__(self):
-        return len(self.chunks)
+        return self.length
 
     def __getitem__(self, index):
         return self.chunks[index]
@@ -604,13 +631,31 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
 
         cp = self.chunk_px
         samples = []
-        indices = np.arange(self.blocks_per_image)
+        indices = np.arange(ceil(self.total_px/cp))
 
         for i in indices:
-            chunks = dataset[i*cp:(i+1)*cp,:]
+            stop_ind = min((i+1)*cp, self.total_px)
+            chunks = dataset[i*cp:stop_ind,:]
             if not self.fit_chunks:
                 samples = samples + self.break_chunk(chunks)
             else:
                 samples.append(chunks)
 
+        self.length = len(samples)
+
         self._chunks = samples
+
+    def min_samples(self, accuracy = 0.1, confidence = 0.9, **kwargs):
+        '''See equation 15 in theorem 3 from:
+         Belghazi, M. I. et al. MINE: Mutual Information Neural Estimation.
+         arXiv:1801.04062 [cs, stat] (2018).
+        '''
+
+        M = 1                                                                   # Max MINE model value
+        d = self.max_px - self.min_px                                           # dimension of parameter space
+        K = 1                                                                   # Max MINE parameter value
+        L = 10                                                                  # Lipshitz constant, no idea just overestimate
+        e = accuracy                                                            # accuracy
+        c = confidence                                                          # confidence
+
+        return (2*M**2*(d*log(16*K*L*d**(0.5)/e) + 2*d*M + log(2/c)))/(e**2)
