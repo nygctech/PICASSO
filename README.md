@@ -1,8 +1,35 @@
+# napari-PICASSO
+
+[![License](https://img.shields.io/pypi/l/napari-curtain.svg?color=green)](https://github.com/nygctech/PICASSO/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/napari-PICASSO.svg?color=green)](https://pypi.org/project/napari-PICASSO)
+[![Python Version](https://img.shields.io/pypi/pyversions/napari-PICASSO.svg?color=green)](https://python.org)
+[![tests](https://github.com/nygctech/napari-PICASSO/workflows/tests/badge.svg)](https://github.com/nygctech/napari-PICASSO/actions)
+[![codecov](https://codecov.io/gh/nygctech/napari-PICASSO/branch/main/graph/badge.svg)](https://codecov.io/gh/nygctech/napari-PICASSO)
+[![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-PICASSO)](https://napari-hub.org/plugins/napari-PICASSO)
+
+Unmix spectral spillover
+
+![](https://user-images.githubusercontent.com/72306584/176486552-50e1bca9-65fd-4466-8c92-a114e48d2278.gif)
+
+## Usage
+
+You find the `PICASSO` plugin in the menu `Plugins > napari-PICASSO: PICASSO`. Select sink images that have spectral spillover from corresponding source images, then click run. 
+
+## Installation
+
+You can install `napari-PICASSO` via [pip]:
+
+    pip install napari-PICASSO
+
+## Details
+
 napari-PICASSO is a napari widget to blindly unmix fluorescence images of known members using PICASSO<sup>1</sup>. 
 
 For example, if 2 fluorophores with overlapping spectra are imaged, spillover fluorescesce from a channel into an adjacent channel could be removed if you know which channel is the source of the spillover fluorescence and which channel is the sink of the spillover fluorescence. 
 
-PICASSO is an algorithm to remove spillover fluorescence by minimizing the mutual information between sink and source images. The original algorithm described by Seo et al, minimized the mutual information between pairs of sink and source images using a Nelson-Mead simplex algorithm and computing the mutual information outright with custom written MATLAB code. The napari plugin uses a neural net to estimate and minimize the mutual information (MINE<sup>2</sup>) between pairs of sink and source images using stochastic gradient descent with GPU acceleration. 
+PICASSO is an algorithm to remove spillover fluorescence by minimizing the mutual information between sink and source images. The original algorithm described by Seo et al, minimized the mutual information between pairs of sink and source images using a Nelson-Mead simplex algorithm and computing the mutual information outright with custom written MATLAB code<sup>1</sup>. The napari plugin uses a neural net to estimate and minimize the mutual information (MINE<sup>2</sup>) between pairs of sink and source images using stochastic gradient descent with GPU acceleration.
+
+## References
 
 1. Seo, J. et al. PICASSO allows ultra-multiplexed fluorescence imaging of spatially overlapping proteins without reference spectra measurements. Nat Commun 13, 2475 (2022).
 2. Belghazi, M. I. et al. MINE: Mutual Information Neural Estimation. arXiv:1801.04062 [cs, stat] (2018).
