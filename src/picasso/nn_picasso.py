@@ -1,7 +1,6 @@
 
 import dask.array as da
 import numpy as np
-from napari.layers import Image
 
 import torch
 import torch.nn as nn
