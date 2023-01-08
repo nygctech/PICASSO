@@ -305,7 +305,8 @@ class PICASSOnn(nn.Module):
 
         n_ims = len(images)
         dataset = self.get_dataset(images)
-        dataloader = DataLoader(dataset, collate_fn = self.dask_collate)
+        #dataloader = DataLoader(dataset, collate_fn = self.dask_collate)
+        dataloader = DataLoader(dataset, collate_fn = collate)
 
         batches = []
         for im in dataloader:
