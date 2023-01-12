@@ -1,7 +1,6 @@
 
 import dask.array as da
 import numpy as np
-from napari.layers import Image
 
 import torch
 import torch.nn as nn
@@ -498,6 +497,8 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
         self.total_px = rows*cols
         self.max_px = dataset.max().compute()                                   # max pixel value in image
         self.min_px = dataset.min().compute()                                   # min pixel value in image
+        min_n_px = ceil(self.min_samples(**kwargs))
+        print('min number pixels', min_n_px)
         dataset = dataset.astype('float32')/self.max_px                         # pixels normalized to 1
         #self.dataset = torch.tensor(dataset.compute(), dtype=torch.float32, )
 
@@ -568,8 +569,6 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
 
         if subset:
             print('pixels in chunk', self.max_px_in_mem)
-            min_n_px = ceil(self.min_samples(**kwargs))
-            print('min number pixels', min_n_px)
             if min_n_px < self.total_px:
                 self.subset_chunks = ceil(min_n_px/self.max_px_in_mem)
             else:
