@@ -3,36 +3,20 @@ from math import log, ceil, floor
 import pkg_resources
 import imageio
 import pooch
+import numpy as np
 
 # # Get the version
-# from _version import version as __version__
+from _version import version as __version__
 
 # Create a new friend to manage your sample data storage
 sample_data = pooch.create(
-    # Folder where the data will be stored. For a sensible default, use the
-    # default cache folder for your OS.
     path=pooch.os_cache("picasso"),
-    # Base URL of the remote data store.
-    #base_url="https://github.com/nygctech/PICASSO/tree/main/sample_data/",
-    base_url="https://github.com/nygctech/PICASSO/tree/fix_unmix/sample_data/",
-    # # Base URL of the remote data store. Will call .format on this string
-    # # to insert the version (see below).
-    # base_url="https://github.com/myproject/mypackage/raw/{version}/data/",
-    # # Pooches are versioned so that you can use multiple versions of a
-    # # package simultaneously. Use PEP440 compliant version number. The
-    # # version will be appended to the path.
-    # version=version,
-    # # If a version as a "+XX.XXXXX" suffix, we'll assume that this is a dev
-    # # version and replace the version with this string.
-    # version_dev="main",
-    # An environment variable that overwrites the path.
+    base_url="https://github.com/nygctech/PICASSO/raw/{version}/sample_data/",
+    version=__version__,
+    version_dev="main",
     env="PICASSO_DATA_DIR",
-    # The cache file registry. A dictionary with all files managed by this
-    # pooch. Keys are the file names (relative to *base_url*) and values
-    # are their respective SHA256 hashes. Files will be downloaded
-    # automatically when needed (see fetch_gravity_data).
-    registry={"GFAP_sink.tiff": "f036be044e0f957a74766b7ed8373fc90bf0d95594db912cedddd40cd752d3ee",
-              "LMNB1_source": "4747ba8c69376f99bb3d84d24da0aeec78447b72d0c11b1e4724c1314815d847"}
+    registry={"GFAP_sink.tiff": "ccc29ee5a9ac6cfe917d9c8c85448c0edda7822e61e7ce8f67ed6313700987f1",
+              "LMNB1_source.tiff": "4747ba8c69376f99bb3d84d24da0aeec78447b72d0c11b1e4724c1314815d847"}
 )
 
 def adj_to_mixing(adj_matrix):
@@ -75,11 +59,11 @@ def exp_floor(x, base=2):
 def sample_images():
     """
     Load some sample images to unmix.
+
+    Channel is last dimension, sink = 0, source = 1
     """
 
-    # Fetch the path to a file in the local storage. If it's not there,
-    # we'll download it.
     sink = imageio.imread(sample_data.fetch("GFAP_sink.tiff"))
     source = imageio.imread(sample_data.fetch("LMNB1_source.tiff"))
 
-    return sink, source
+    return np.stack([sink, source],-1)

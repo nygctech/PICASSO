@@ -1,14 +1,15 @@
 import pytest
 from picasso.nn_picasso import PICASSOnn, collate
 from torch.utils.data import DataLoader
-from skimage.data import astronaut
+#from skimage.data import astronaut
 import numpy as np
 import dask.array as da
 import xarray as xr
+from picasso.utils import sample_images
 
 def image_formats():
 
-    np_image = astronaut()
+    np_image = sample_images()
     rows, cols, chs = np_image.shape
     chs = range(chs)
 
@@ -33,7 +34,7 @@ def image_formats():
 
 @pytest.mark.parametrize('image', image_formats())
 def test_dataloader_gpu(image):
-    mm = np.array([[1],[-1],[-1]])
+    mm = np.array([[1],[-1]])
     model = PICASSOnn(mm)
     assert model.device in ['cuda', 'cpu']
 
@@ -42,3 +43,17 @@ def test_dataloader_gpu(image):
 
     for batch, im_list in enumerate(dataloader):
         assert batch == 0
+
+def test_unmix():
+
+    ims = sample_images()
+    ims_ = [ims[:,:,0], ims[:,:,1]]
+    mixing_matrix = np.array([[1],[-1]])
+    model = PICASSOnn(mixing_matrix)
+    for i in model.train_loop(ims_):
+        pass
+    unmixed = model.unmix_images(ims_)
+
+    R = np.corrcoef(ims[:,:,1].flatten(), unmixed.compute().flatten())
+
+    assert abs(R[0,1]) <= 0.1
