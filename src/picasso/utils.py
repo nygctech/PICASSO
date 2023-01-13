@@ -4,15 +4,16 @@ import pkg_resources
 import imageio
 import pooch
 import numpy as np
+import picasso
 
 # # Get the version
-from _version import version as __version__
+version = picasso.__version__
 
 # Create a new friend to manage your sample data storage
 sample_data = pooch.create(
     path=pooch.os_cache("picasso"),
     base_url="https://github.com/nygctech/PICASSO/raw/{version}/sample_data/",
-    version=__version__,
+    version=version,
     version_dev="main",
     env="PICASSO_DATA_DIR",
     registry={"GFAP_sink.tiff": "ccc29ee5a9ac6cfe917d9c8c85448c0edda7822e61e7ce8f67ed6313700987f1",
