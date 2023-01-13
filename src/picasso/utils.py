@@ -13,7 +13,8 @@ sample_data = pooch.create(
     # default cache folder for your OS.
     path=pooch.os_cache("picasso"),
     # Base URL of the remote data store.
-    base_url="https://github.com/nygctech/PICASSO/tree/main/sample_data/",
+    #base_url="https://github.com/nygctech/PICASSO/tree/main/sample_data/",
+    base_url="https://github.com/nygctech/PICASSO/tree/fix_unmix/sample_data/",
     # # Base URL of the remote data store. Will call .format on this string
     # # to insert the version (see below).
     # base_url="https://github.com/myproject/mypackage/raw/{version}/data/",
@@ -30,7 +31,7 @@ sample_data = pooch.create(
     # pooch. Keys are the file names (relative to *base_url*) and values
     # are their respective SHA256 hashes. Files will be downloaded
     # automatically when needed (see fetch_gravity_data).
-    registry={"GFAP_sink.tiff": "ccc29ee5a9ac6cfe917d9c8c85448c0edda7822e61e7ce8f67ed6313700987f1",
+    registry={"GFAP_sink.tiff": "f036be044e0f957a74766b7ed8373fc90bf0d95594db912cedddd40cd752d3ee",
               "LMNB1_source": "4747ba8c69376f99bb3d84d24da0aeec78447b72d0c11b1e4724c1314815d847"}
 )
 
