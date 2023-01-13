@@ -305,14 +305,17 @@ class PICASSOnn(nn.Module):
 
         n_ims = len(images)
         dataset = self.get_dataset(images)
-        dataloader = DataLoader(dataset, collate_fn = self.dask_collate)
+
+        #dataloader = DataLoader(dataset, collate_fn = self.dask_collate)
+        dataloader = DataLoader(dataset, collate_fn = collate)
 
         batches = []
         for im in dataloader:
-            if len(im) == 1:
-                im = im[0]
-            else:
-                im = torch.cat(im, dim=0)
+
+            # if len(im) == 1:
+            #     im = im[0]
+            # else:
+            #     im = torch.cat(im, dim=0)
             batches.append(da.from_array(self.transform(im).cpu().detach().numpy()))
         unmixed = da.concatenate(batches, axis=0)
 
@@ -574,7 +577,10 @@ class PICASSO_Dataset(torch.utils.data.Dataset):
             else:
                 self.subset_chunks = 1
             print('Chunks per iteration:', self.subset_chunks)
-            print((self.subset_chunks*self.max_px_in_mem)/(rows*cols)*100, '% of pixels used')
+            percent_px_used = (self.subset_chunks*self.max_px_in_mem)/(rows*cols)*100
+            if percent_px_used > 100:
+                percent_px_used = 100
+            print(f'{percent_px_used} % of pixels used')
         else:
             self.subset_chunks = self.length
 

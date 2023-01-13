@@ -1,5 +1,23 @@
 from math import log, ceil, floor
 
+import pkg_resources
+import imageio
+import pooch
+import numpy as np
+
+# # Get the version
+from _version import version as __version__
+
+# Create a new friend to manage your sample data storage
+sample_data = pooch.create(
+    path=pooch.os_cache("picasso"),
+    base_url="https://github.com/nygctech/PICASSO/raw/{version}/sample_data/",
+    version=__version__,
+    version_dev="main",
+    env="PICASSO_DATA_DIR",
+    registry={"GFAP_sink.tiff": "ccc29ee5a9ac6cfe917d9c8c85448c0edda7822e61e7ce8f67ed6313700987f1",
+              "LMNB1_source.tiff": "4747ba8c69376f99bb3d84d24da0aeec78447b72d0c11b1e4724c1314815d847"}
+)
 
 def adj_to_mixing(adj_matrix):
     '''Convert adjacency matrix to mixing matrix.'''
@@ -37,3 +55,15 @@ def exp_ceil(x, base=2):
 def exp_floor(x, base=2):
 
     return base**floor(log(x, base))
+
+def sample_images():
+    """
+    Load some sample images to unmix.
+
+    Channel is last dimension, sink = 0, source = 1
+    """
+
+    sink = imageio.imread(sample_data.fetch("GFAP_sink.tiff"))
+    source = imageio.imread(sample_data.fetch("LMNB1_source.tiff"))
+
+    return np.stack([sink, source],-1)
