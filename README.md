@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/napari-PICASSO.svg?color=green)](https://pypi.org/project/napari-PICASSO)
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-PICASSO.svg?color=green)](https://python.org)
 [![tests](https://github.com/nygctech/PICASSO/actions/workflows/test_and_deploy.yml/badge.svg?event=push)](https://github.com/nygctech/PICASSO/actions/workflows/test_and_deploy.yml)
-[![codecov](https://codecov.io/gh/nygctech/napari-PICASSO/branch/main/graph/badge.svg)](https://codecov.io/gh/nygctech/napari-PICASSO)
+[![codecov](https://codecov.io/gh/nygctech/PICASSO/branch/main/graph/badge.svg?token=4xOocXnFHt)](https://codecov.io/gh/nygctech/PICASSO)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-PICASSO)](https://napari-hub.org/plugins/napari-PICASSO)
 
 Unmix spectral spillover
